@@ -7,8 +7,8 @@
 #SBATCH --mem=32G
 #SBATCH --array=0
 #SBATCH --acctg-freq=task=1
-#SBATCH --output=%x/%A-%a.out
-#SBATCH --error=%x/%A-%a.err
+#SBATCH --output=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/original/%A-%a.out
+#SBATCH --error=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/original/%A-%a.err
 
 set -euo pipefail
 
@@ -21,6 +21,9 @@ sleep $(( (SLURM_ARRAY_TASK_ID % 10) * 3 ))
 
 # --- Clean env, load modules ---
 module --force purge
+set +u
+source /cvmfs/soft.computecanada.ca/config/profile/bash.sh
+set -u
 source /cvmfs/soft.computecanada.ca/config/profile/bash.sh
 module load StdEnv/2020
 module load cuda/11.4
