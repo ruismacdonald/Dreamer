@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=dreamer_reacher
+#SBATCH --job-name=dreamer_FIFO_reacherloca
 #SBATCH --account=def-rsdjjana
 #SBATCH --time=6-23:59:59
 #SBATCH --gres=gpu:1
@@ -7,10 +7,10 @@
 #SBATCH --mem=32G
 #SBATCH --array=0
 #SBATCH --acctg-freq=task=1
-#SBATCH --output=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/original/%A-%a.out
-#SBATCH --error=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/original/%A-%a.err
+#SBATCH --output=/home/ruism/projects/def-rsdjjana/ruism/Dreamer_FIFO/reacherloca/%A-%a.out
+#SBATCH --error=/home/ruism/projects/def-rsdjjana/ruism/Dreamer_FIFO/reacherloca/%A-%a.err
 
-BASE_SAVE_DIR="$HOME/projects/def-rsdjjana/ruism/Dreamer/original/reacherloca"
+BASE_SAVE_DIR="$HOME/projects/def-rsdjjana/ruism/Dreamer_FIFO/reacherloca"
 
 # Make sure log dir exists (SLURM will drop stdout/err here)
 mkdir -p "$BASE_SAVE_DIR"
@@ -46,7 +46,7 @@ export WANDB_MODE=offline
 
 # --- Per-task scratch run dir and final dir ---
 : "${SLURM_TMPDIR:=/tmp}"
-RUN_DIR="${SLURM_TMPDIR}/dreamer-${SLURM_JOB_ID:-0}-${SLURM_ARRAY_TASK_ID:-0}"
+RUN_DIR="${SLURM_TMPDIR}/dreamer-fifo-${SLURM_JOB_ID:-0}-${SLURM_ARRAY_TASK_ID:-0}"
 FINAL_DIR="${BASE_SAVE_DIR}/${SLURM_ARRAY_TASK_ID}"
 mkdir -p "$RUN_DIR" "$FINAL_DIR"
 
@@ -59,7 +59,7 @@ _finish() {
 trap _finish EXIT TERM INT
 
 # --- Where the source code lives ---
-DREAMER_SRC="$HOME/projects/def-rsdjjana/ruism/Dreamer"
+DREAMER_SRC="$HOME/projects/def-rsdjjana/ruism/Dreamer_FIFO"
 
 # Run *from scratch* so all outputs land in $RUN_DIR
 cd "$RUN_DIR"
