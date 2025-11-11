@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=dreamer
+#SBATCH --job-name=dreamer_reacher
 #SBATCH --account=def-rsdjjana
 #SBATCH --time=6-23:59:59
 #SBATCH --gres=gpu:1
@@ -10,7 +10,7 @@
 #SBATCH --output=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/original/%A-%a.out
 #SBATCH --error=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/original/%A-%a.err
 
-BASE_SAVE_DIR="$HOME/projects/def-rsdjjana/ruism/Dreamer/original"
+BASE_SAVE_DIR="$HOME/projects/def-rsdjjana/ruism/Dreamer/original/reacherloca"
 
 # Make sure log dir exists (SLURM will drop stdout/err here)
 mkdir -p "$BASE_SAVE_DIR"
@@ -80,7 +80,7 @@ PY
 
 # --- Train (seed = array index) ---
 python -u "$DREAMER_SRC/dreamer.py" \
-  --env 'walker-walk' \
+  --env 'reacherloca' \
   --algo 'Dreamerv2' \
   --exp 'default_hp' \
   --train \
