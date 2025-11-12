@@ -7,10 +7,11 @@
 #SBATCH --mem=32G
 #SBATCH --array=0
 #SBATCH --acctg-freq=task=1
-#SBATCH --output=/home/ruism/projects/def-rsdjjana/ruism/Dreamer_FIFO/reacherloca/%A-%a.out
-#SBATCH --error=/home/ruism/projects/def-rsdjjana/ruism/Dreamer_FIFO/reacherloca/%A-%a.err
+#SBATCH --output=/home/ruism/projects/def-rsdjjana/ruism/Dreamer_results/reacherloca/FIFO/%A-%a.out
+#SBATCH --error=/home/ruism/projects/def-rsdjjana/ruism/Dreamer_results/reacherloca/FIFO/%A-%a.err
 
-BASE_SAVE_DIR="$HOME/projects/def-rsdjjana/ruism/Dreamer_FIFO/reacherloca"
+mkdir -p $HOME/projects/def-rsdjjana/ruism/Dreamer_results/reacherloca/FIFO
+BASE_SAVE_DIR="$HOME/projects/def-rsdjjana/ruism/Dreamer_results/reacherloca/FIFO"
 
 # Make sure log dir exists (SLURM will drop stdout/err here)
 mkdir -p "$BASE_SAVE_DIR"
