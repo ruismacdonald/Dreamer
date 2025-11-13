@@ -2,6 +2,18 @@ import os
 import pickle
 import torch
 import numpy as np 
+import imageio
+
+# Tell imageio/moviepy to use the system ffmpeg (loaded via module)
+ffmpeg_exe = os.environ.get("IMAGEIO_FFMPEG_EXE", "ffmpeg")
+
+# Old imageio-based MoviePy calls imageio.plugins.ffmpeg.download() at import time
+if hasattr(imageio, "plugins") and hasattr(imageio.plugins, "ffmpeg"):
+    def _noop_download(*args, **kwargs):
+        # Do NOT download anything; just pretend "ffmpeg" is available.
+        return ffmpeg_exe
+    imageio.plugins.ffmpeg.download = _noop_download
+
 import moviepy.editor as mpy
 
 import matplotlib.pyplot as plt 
