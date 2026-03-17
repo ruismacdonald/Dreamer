@@ -1,5 +1,6 @@
 import os
 import pickle
+import json
 import torch
 import numpy as np 
 import moviepy.editor as mpy
@@ -62,10 +63,14 @@ class Logger:
     def log_scalars(self, scalar_dict, step):
         for key, value in scalar_dict.items():
             print('{} : {}'.format(key, value))
+            if isinstance(value, list):
+                continue
             self.log_scalar(value, key, step)
         self.dump_scalars_to_pickle(scalar_dict, step)
 
-    def log_videos(self, videos, step, max_videos_to_save=1, fps=20, video_title='video'):
+    def log_videos(
+            self, videos, step, max_videos_to_save=1, fps=20, video_title='video'
+        ):
 
         # max rollout length
         max_videos_to_save = np.min([max_videos_to_save, videos.shape[0]])
@@ -81,15 +86,17 @@ class Logger:
                 videos[i] = np.concatenate([videos[i], padding], 0)
 
             clip = mpy.ImageSequenceClip(list(videos[i]), fps=fps)
-            new_video_title = video_title+'{}_{}'.format(step, i) + '.gif'
+            new_video_title = video_title + "{}_{}".format(step, i) + ".gif"
             filename = os.path.join(self._log_dir, new_video_title)
-            video.write_gif(filename, fps =fps)
+            clip.write_gif(filename, fps =fps)
 
 
     def dump_scalars_to_pickle(self, metrics, step, log_title=None):
-        log_path = os.path.join(self._log_dir, "scalar_data.pkl" if log_title is None else log_title)
-        with open(log_path, 'ab') as f:
-            pickle.dump({'step': step, **dict(metrics)}, f)
+        log_path = os.path.join(
+            self._log_dir, "scalar_data.jsonl" if log_title is None else log_title
+        )
+        with open(log_path, "a") as f:
+            f.write(json.dumps({"step": step, **dict(metrics)}) + "\n")
 
     def flush(self):
         self._summ_writer.flush()
