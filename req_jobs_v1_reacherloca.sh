@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --exclude=ng[11105-11106]
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=64G
+#SBATCH --mem=32G
 #SBATCH --array=0-9
 #SBATCH --acctg-freq=task=1
 #SBATCH --output=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1/%A-%a.out
