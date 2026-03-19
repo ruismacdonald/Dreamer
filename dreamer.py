@@ -15,17 +15,21 @@ from collections import OrderedDict
 import env_wrapper
 from replay_buffer import ReplayBuffer
 from models import RSSM, ConvEncoder, ConvDecoder, DenseDecoder, ActionDecoder
+from state_distance import SimpleContrastiveStateDistanceModel
 from utils import *
 
 os.environ['MUJOCO_GL'] = 'egl'
 
-def make_env(args):
-
-    env = env_wrapper.DeepMindControl(args.env, args.seed)
+def make_env(args, loca_phase="phase_1", loca_mode="train"):
+    seed = args.seed
+    if loca_mode == "eval":
+        seed = None
+    env = env_wrapper.DMCLoCA(
+        args.env, seed, loca_phase=loca_phase, loca_mode=loca_mode
+    )
     env = env_wrapper.ActionRepeat(env, args.action_repeat)
     env = env_wrapper.NormalizeActions(env)
     env = env_wrapper.TimeLimit(env, args.time_limit / args.action_repeat)
-    #env = env_wrapper.RewardObs(env)
     return env
 
 def preprocess_obs(obs):
@@ -34,7 +38,7 @@ def preprocess_obs(obs):
 
 class Dreamer:
 
-    def __init__(self, args, obs_shape, action_size, device, restore=False):
+    def __init__(self, args, obs_shape, action_size, device, restore=False, loca_state_distance=False, state_distance_model=None,):
 
         self.args = args
         self.obs_shape = obs_shape
@@ -42,8 +46,28 @@ class Dreamer:
         self.device = device
         self.restore = args.restore
         self.restore_path = args.checkpoint_path
-        self.data_buffer = ReplayBuffer(self.args.buffer_size, self.obs_shape, self.action_size,
-                                                    self.args.train_seq_len, self.args.batch_size)
+
+        self.loca_state_distance = loca_state_distance
+        self.state_distance_model = None
+        if self.loca_state_distance:
+            self.data_buffer = ReplayBuffer(
+                self.args.buffer_size,
+                self.obs_shape,
+                self.action_size,
+                self.args.train_seq_len,
+                self.args.batch_size,
+                distance_process=True,
+                obs_repr_rad=args.loca_replay_rad,
+                obs_repr_count=args.loca_replay_count,
+            )
+            self.state_distance_model = state_distance_model
+        else:
+            self.data_buffer = ReplayBuffer(
+                self.args.buffer_size, 
+                self.obs_shape, 
+                self.action_size,
+                self.args.train_seq_len, 
+                self.args.batch_size)
 
         self._build_model(restore=self.restore)
 
@@ -120,13 +144,14 @@ class Dreamer:
         if restore:
             self.restore_checkpoint(self.restore_path)
 
-    def world_model_loss(self, obs, acs, rews, nonterms):
+    def world_model_loss(self, obs, acs, rews, nonterms, kept):
 
         obs = preprocess_obs(obs)
         obs_embed = self.obs_encoder(obs[1:])
         init_state = self.rssm.init_state(self.args.batch_size, self.device)
         prior, self.posterior = self.rssm.observe_rollout(obs_embed, acs[:-1], nonterms[:-1], init_state, self.args.train_seq_len-1)
         features = torch.cat([self.posterior['stoch'], self.posterior['deter']], dim=-1)
+        
         rew_dist = self.reward_model(features)
         obs_dist = self.obs_decoder(features)
         if self.args.use_disc_model:
@@ -135,30 +160,47 @@ class Dreamer:
         prior_dist = self.rssm.get_dist(prior['mean'], prior['std'])
         post_dist = self.rssm.get_dist(self.posterior['mean'], self.posterior['std'])
 
+        # kept: (L, n, 1), aligned to the posterior steps which are obs[1:], i.e. kept[:-1] has shape (L-1, n, 1) matching features
+        kept_steps = kept[:-1]  # (L-1, n, 1)
+        n_kept = kept_steps.sum().clamp(min=1)
+
+        # KL loss
         if self.args.algo == 'Dreamerv2':
-            post_no_grad = self.rssm.detach_state(self.posterior)
+            post_no_grad  = self.rssm.detach_state(self.posterior)
             prior_no_grad = self.rssm.detach_state(prior)
-            post_mean_no_grad, post_std_no_grad = post_no_grad['mean'], post_no_grad['std']
-            prior_mean_no_grad, prior_std_no_grad = prior_no_grad['mean'], prior_no_grad['std']
-            
-            kl_loss = self.args.kl_alpha *(torch.mean(distributions.kl.kl_divergence(
-                               self.rssm.get_dist(post_mean_no_grad, post_std_no_grad), prior_dist)))
-            kl_loss += (1-self.args.kl_alpha) * (torch.mean(distributions.kl.kl_divergence(
-                               post_dist, self.rssm.get_dist(prior_mean_no_grad, prior_std_no_grad))))
+            kl_loss = self.args.kl_alpha * (
+                distributions.kl.kl_divergence(
+                    self.rssm.get_dist(post_no_grad['mean'], post_no_grad['std']), prior_dist
+                ) * kept_steps.squeeze(-1)
+            ).sum() / n_kept
+            kl_loss += (1 - self.args.kl_alpha) * (
+                distributions.kl.kl_divergence(
+                    post_dist, self.rssm.get_dist(prior_no_grad['mean'], prior_no_grad['std'])
+                ) * kept_steps.squeeze(-1)
+            ).sum() / n_kept
         else:
-            kl_loss = torch.mean(distributions.kl.kl_divergence(post_dist, prior_dist))
-            kl_loss = torch.max(kl_loss, kl_loss.new_full(kl_loss.size(), self.args.free_nats))
-
-        obs_loss = -torch.mean(obs_dist.log_prob(obs[1:])) 
-        rew_loss = -torch.mean(rew_dist.log_prob(rews[:-1]))
-        if self.args.use_disc_model:
-          disc_loss = -torch.mean(disc_dist.log_prob(nonterms[:-1]))
-
-        if self.args.use_disc_model:
-          model_loss = self.args.kl_loss_coeff * kl_loss + obs_loss + rew_loss + self.args.disc_loss_coeff * disc_loss
-        else:
-          model_loss = self.args.kl_loss_coeff * kl_loss + obs_loss + rew_loss 
+            kl = distributions.kl.kl_divergence(post_dist, prior_dist)     # (L-1, n, stoch_size)
+            kl = torch.max(kl, kl.new_full(kl.size(), self.args.free_nats))
+            kl_loss = (kl * kept_steps).sum() / n_kept
         
+        # Obs loss
+        # obs_dist.log_prob: (L-1, n, C, H, W) -> sum over pixels, mask over steps
+        obs_log_prob = obs_dist.log_prob(obs[1:])  # (L-1, n, C, H, W)
+        obs_log_prob = obs_log_prob.sum(dim=[-3, -2, -1])  # (L-1, n)
+        obs_loss = -(obs_log_prob * kept_steps.squeeze(-1)).sum() / n_kept
+
+        # Reward loss
+        rew_log_prob = rew_dist.log_prob(rews[:-1]).squeeze(-1)             # (L-1, n)
+        rew_loss = -(rew_log_prob * kept_steps.squeeze(-1)).sum() / n_kept
+
+        # Discount loss
+        if self.args.use_disc_model:
+            disc_log_prob = disc_dist.log_prob(nonterms[:-1]).squeeze(-1)   # (L-1, n)
+            disc_loss = -(disc_log_prob * kept_steps.squeeze(-1)).sum() / n_kept
+            model_loss = (self.args.kl_loss_coeff * kl_loss + obs_loss + rew_loss + self.args.disc_loss_coeff * disc_loss)
+        else:
+            model_loss = self.args.kl_loss_coeff * kl_loss + obs_loss + rew_loss
+
         return model_loss
 
     def actor_loss(self):
@@ -205,13 +247,14 @@ class Dreamer:
 
     def train_one_batch(self):
 
-        obs, acs, rews, terms = self.data_buffer.sample()
+        obs, acs, rews, terms, kept = self.data_buffer.sample()
         obs  = torch.tensor(obs, dtype=torch.float32).to(self.device)
         acs  = torch.tensor(acs, dtype=torch.float32).to(self.device)
         rews = torch.tensor(rews, dtype=torch.float32).to(self.device).unsqueeze(-1)
         nonterms = torch.tensor((1.0-terms), dtype=torch.float32).to(self.device).unsqueeze(-1)
 
-        model_loss = self.world_model_loss(obs, acs, rews, nonterms)
+        kept = torch.tensor(kept, dtype=torch.float32).to(self.device).unsqueeze(-1)
+        model_loss = self.world_model_loss(obs, acs, rews, nonterms, kept)
         self.world_model_opt.zero_grad()
         model_loss.backward()
         nn.utils.clip_grad_norm_(self.world_model_params, self.args.grad_clip_norm)
@@ -259,7 +302,12 @@ class Dreamer:
                 posterior, action = self.act_with_world_model(obs, prev_state, prev_action, explore=True)
             action = action[0].cpu().numpy()
             next_obs, rew, done, _ = env.step(action)
-            self.data_buffer.add(obs, action, rew, done)
+            representation = None
+            if self.loca_state_distance:
+                representation = self.state_distance_model.get_representation(
+                    preprocess_obs(torch.tensor(obs["image"], dtype=torch.float32).unsqueeze(0))
+                )
+            self.data_buffer.add(obs, action, rew, done, representation)
 
             episode_rewards[-1] += rew
 
@@ -314,7 +362,12 @@ class Dreamer:
             action = env.action_space.sample()
             next_obs, rew, done, _ = env.step(action)
             
-            self.data_buffer.add(obs, action, rew, done)
+            representation = None
+            if self.loca_state_distance:
+                representation = self.state_distance_model.get_representation(
+                    preprocess_obs(torch.tensor(obs["image"], dtype=torch.float32).unsqueeze(0))
+                )
+            self.data_buffer.add(obs, action, rew, done, representation)
             seed_episode_rews[-1] += rew
             if done:
                 obs = env.reset()
@@ -331,6 +384,7 @@ class Dreamer:
         torch.save(
             {'rssm' : self.rssm.state_dict(),
             'actor': self.actor.state_dict(),
+            "value_model": self.value_model.state_dict(),
             'reward_model': self.reward_model.state_dict(),
             'obs_encoder': self.obs_encoder.state_dict(),
             'obs_decoder': self.obs_decoder.state_dict(),
@@ -344,6 +398,7 @@ class Dreamer:
         checkpoint = torch.load(ckpt_path)
         self.rssm.load_state_dict(checkpoint['rssm'])
         self.actor.load_state_dict(checkpoint['actor'])
+        self.value_model.load_state_dict(checkpoint['value_model'])
         self.reward_model.load_state_dict(checkpoint['reward_model'])
         self.obs_encoder.load_state_dict(checkpoint['obs_encoder'])
         self.obs_decoder.load_state_dict(checkpoint['obs_decoder'])
@@ -367,7 +422,8 @@ def main():
     parser.add_argument('--no-gpu', action='store_true', help="GPUs aren't used if passed true")
     # Data parameters
     parser.add_argument('--max-episode-length', type=int, default=1000, help='Max episode length')
-    parser.add_argument('--buffer-size', type=int, default=1000000, help='Experience replay size')  # Original implementation has an unlimited buffer size, but 1 million is the max experience collected anyway
+    parser.add_argument('--buffer-size', type=int, default=1250000, help='Experience replay size')  # Original implementation has an unlimited buffer size, but 1 million is the max experience collected anyway. 
+    #Ali used 2.5, but 1.25 is used since because of action-repeat=2 only every second transition is stored and the reward of the stored transition is the sum of rt and rt-1
     parser.add_argument('--time-limit', type=int, default=1000, help='time limit') # Environment TimeLimit
     # Models parameters
     parser.add_argument('--cnn-activation-function', type=str, default='relu', help='Model activation function for a convolution layer')
@@ -380,7 +436,7 @@ def main():
     parser.add_argument('--action-repeat', type=int, default=2, help='Action repeat')
     parser.add_argument('--action-noise', type=float, default=0.3, help='Action noise')
     # Training parameters
-    parser.add_argument('--total_steps', type=int, default=5e6, help='total number of training steps')
+    # parser.add_argument('--total_steps', type=int, default=5e6, help='total number of training steps')
     parser.add_argument('--seed-steps', type=int, default=5000, help='seed episodes')
     parser.add_argument('--update-steps', type=int, default=100, help='num of train update steps per iter')
     parser.add_argument('--collect-steps', type=int, default=1000, help='actor collect steps per 1 train iter')
@@ -416,6 +472,18 @@ def main():
     parser.add_argument('--experience-replay', type=str, default='', help='Load experience replay')
     parser.add_argument('--render', action='store_true', help='Render environment')
 
+    # LoFo and LoCA parameters
+    parser.add_argument("--loca-all-phases", action="store_true", help="")
+    parser.add_argument("--loca-phase", type=str, default="phase_1", help="")
+    parser.add_argument("--loca-phase1-steps", type=int, default=0, help="")
+    parser.add_argument("--loca-phase2-steps", type=int, default=0, help="")
+    parser.add_argument("--loca-phase3-steps", type=int, default=0, help="")
+
+    parser.add_argument("--loca-state-distance", action="store_true", help="")
+    parser.add_argument("--loca-replay-rad", type=float, default=0.05)
+    parser.add_argument("--loca-replay-count", type=int, default=10, help="")  
+    # Changed default value from 2 to 10 since is what Ali used in paper
+
 
     args = parser.parse_args()
 
@@ -424,8 +492,22 @@ def main():
     if not (os.path.exists(data_path)):
         os.makedirs(data_path)
 
-    logdir = args.env + '_' + args.algo + '_' + args.exp_name + '_' + time.strftime("%d-%m-%Y-%H-%M-%S")
-    logdir = os.path.join(data_path, logdir)
+    if args.loca_all_phases:
+        total_steps = (
+            args.loca_phase1_steps + args.loca_phase2_steps + args.loca_phase3_steps
+        )
+        loca_phase = "phase_1"
+    else:
+        total_steps = args.loca_phase1_steps
+        loca_phase = "phase_1"
+        if args.loca_phase == "phase_2":
+            total_steps = args.loca_phase2_steps
+            loca_phase = "phase_2"
+        elif args.loca_phase == "phase_3":
+            total_steps = args.loca_phase3_steps
+            loca_phase = "phase_3"
+
+    logdir = os.path.join(data_path, args.exp_name, str(args.seed), loca_phase)
     if not(os.path.exists(logdir)):
         os.makedirs(logdir)
 
@@ -439,13 +521,41 @@ def main():
     else:
         device = torch.device('cpu')
 
-    train_env = make_env(args)
-    test_env  = make_env(args)
+    train_env = make_env(args, loca_phase, "train")
+    test_env = make_env(args, loca_phase, "eval")
     obs_shape = train_env.observation_space['image'].shape
     action_size = train_env.action_space.shape[0]
     dreamer = Dreamer(args, obs_shape, action_size, device, args.restore)
 
     logger = Logger(logdir)
+
+    if args.loca_state_distance:
+        print("Start state distance learning process.")
+        num_state_distance_steps = 100000
+        _ = dreamer.collect_random_episodes(
+            train_env, num_state_distance_steps // args.action_repeat
+        )
+
+        print("Start training state distance model.")
+        state_distance_model = SimpleContrastiveStateDistanceModel(
+            obs_shape, torch.optim.Adam, device=device
+        )
+        state_distance_model.train(dreamer.data_buffer.get_data())
+
+        ckpt_dir = os.path.join(logdir, "ckpts/")
+        if not (os.path.exists(ckpt_dir)):
+            os.makedirs(ckpt_dir)
+        state_distance_model.save(ckpt_dir)
+        print("Finished state distance learning process.")
+        dreamer = Dreamer(
+            args,
+            obs_shape,
+            action_size,
+            device,
+            args.restore,
+            loca_state_distance=True,
+            state_distance_model=state_distance_model,
+        )
 
     if args.train:
         initial_logs = OrderedDict()
@@ -463,14 +573,53 @@ def main():
             'eval_min_reward': np.min(seed_episode_rews),
             'eval_std_reward':np.std(seed_episode_rews),
             })
+        
+        episode_rews, video_images = dreamer.evaluate(test_env, args.test_episodes)
+        initial_logs.update(
+            {
+                'eval_avg_reward': np.mean(episode_rews),
+                'eval_max_reward': np.max(episode_rews),
+                'eval_min_reward': np.min(episode_rews),
+                'eval_std_reward': np.std(episode_rews),
+                'eval_rewards': episode_rews.tolist(),
+            }
+        )
 
         logger.log_scalars(initial_logs, step=0)
         logger.flush()
 
-        while global_step <= args.total_steps:
+        while global_step <= total_steps:
 
             print("##################################")
             print(f"At global step {global_step}")
+
+            if (
+                args.loca_all_phases
+                and (loca_phase == "phase_1")
+                and (global_step > args.loca_phase1_steps)
+            ):
+                ckpt_dir = os.path.join(logdir, "ckpts/")
+                if not (os.path.exists(ckpt_dir)):
+                    os.makedirs(ckpt_dir)
+                dreamer.save(os.path.join(ckpt_dir, f"models_{loca_phase}.pt"))
+
+                loca_phase = "phase_2"
+                train_env = make_env(args, loca_phase, "train")
+                test_env = make_env(args, loca_phase, "eval")
+
+            if (
+                args.loca_all_phases
+                and (loca_phase == "phase_2")
+                and (global_step > args.loca_phase1_steps + args.loca_phase2_steps)
+            ):
+                ckpt_dir = os.path.join(logdir, "ckpts/")
+                if not (os.path.exists(ckpt_dir)):
+                    os.makedirs(ckpt_dir)
+                dreamer.save(os.path.join(ckpt_dir, f"models_{loca_phase}.pt"))
+
+                loca_phase = "phase_3"
+                train_env = make_env(args, loca_phase, "train")
+                test_env = make_env(args, loca_phase, "eval")
 
             logs = OrderedDict()
 
@@ -497,7 +646,10 @@ def main():
                     'eval_max_reward': np.max(episode_rews),
                     'eval_min_reward': np.min(episode_rews),
                     'eval_std_reward':np.std(episode_rews),
+                    'eval_rewards': episode_rews.tolist(),
                 })
+
+                logs.update(dreamer.data_buffer.report_statistics())
             
             logger.log_scalars(logs, global_step)
 
@@ -508,7 +660,7 @@ def main():
                 ckpt_dir = os.path.join(logdir, 'ckpts/')
                 if not (os.path.exists(ckpt_dir)):
                     os.makedirs(ckpt_dir)
-                dreamer.save(os.path.join(ckpt_dir,  f'{global_step}_ckpt.pt'))
+                dreamer.save(os.path.join(ckpt_dir, f"models.pt"))
 
             global_step = dreamer.data_buffer.steps * args.action_repeat
             logger.flush()
@@ -522,6 +674,7 @@ def main():
             'test_max_reward': np.max(episode_rews),
             'test_min_reward': np.min(episode_rews),
             'test_std_reward':np.std(episode_rews),
+            'test_rewards': episode_rews.tolist(),
         })
 
         logger.dump_scalars_to_pickle(logs, 0, log_title='test_scalars.pkl')
