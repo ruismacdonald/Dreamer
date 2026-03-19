@@ -17,8 +17,10 @@ class ReplayBuffer:
         batch_size : int – number of sequences per batch
         distance_process : bool – enable LoFo mode (default False -> pure FIFO)
         obs_repr_rad : float – D_local: neighbourhood radius in representation space
-        obs_repr_count : int – N_local: max number of local candidate sequences kept per anchor (most-recent ones are preferred)
-        obs_repr_size : int – dimensionality of the state-distance representation vector; required when distance_process=True
+        obs_repr_count : int – N_local: max number of transitions allowed in the local 
+                        neighbourhood before the oldest is discarded
+        obs_repr_size : int – dimensionality of the state-distance representation vector; required 
+                        when distance_process=True
     """
 
     def __init__(
@@ -77,29 +79,31 @@ class ReplayBuffer:
             ac : np.ndarray, shape (action_size,)
             rew : float
             done : bool or float — episode termination flag
-            representation : np.ndarray of shape (obs_repr_size,), or None State-distance embedding from SimpleContrastiveStateDistanceModel. Must be provided on every call when distance_process=True.
+            representation : np.ndarray of shape (obs_repr_size,), or None State-distance embedding 
+                            from SimpleContrastiveStateDistanceModel. Must be provided on every call when distance_process=True.
         """
         self.observations[self.idx] = obs['image']
         self.actions[self.idx] = ac
         self.rewards[self.idx] = rew
         self.terminals[self.idx] = done
-        self.kept[self.idx] = 1.0
 
-        if self.distance_process and representation is not None:
-            self.representations[self.idx] = representation
-            
-            # Compute distances from new transition to all valid stored transitions
-            buf = self._valid_buffer_size()  # Call before incrementing idx
-            reprs = self.representations[:buf]  # (buf, repr_size)
-            dists = np.linalg.norm(reprs - representation, axis=-1)  # (buf,)
-            
-            # Find all transitions in the local neighbourhood
-            neighbours = np.where(dists <= self.obs_repr_rad)[0]  # Indices within D_local
-            
-            # If neighbourhood exceeds N_local, discard the oldest (lowest buffer index)
-            if len(neighbours) > self.obs_repr_count:
-                oldest = neighbours[np.argmin(neighbours)]  # Lowest index = oldest
-                self.kept[oldest] = 0.0
+        if self.distance_process:
+            self.kept[self.idx] = 1.0
+            if representation is not None:
+                self.representations[self.idx] = representation
+                
+                # Compute distances from new transition to all valid stored transitions
+                buf = self._valid_buffer_size()  # Call before incrementing idx
+                reprs = self.representations[:buf]  # (buf, repr_size)
+                dists = np.linalg.norm(reprs - representation, axis=-1)  # (buf,)
+                
+                # Find all transitions in the local neighbourhood
+                neighbours = np.where(dists <= self.obs_repr_rad)[0]  # Indices within D_local
+                
+                # If neighbourhood exceeds N_local, discard the oldest (lowest buffer index)
+                if len(neighbours) > self.obs_repr_count:
+                    oldest = neighbours[np.argmin(neighbours)]  # Lowest index = oldest
+                    self.kept[oldest] = 0.0
 
         self.full = self.full or (self.idx + 1 == self.size)
         self.idx = (self.idx + 1) % self.size
@@ -114,21 +118,14 @@ class ReplayBuffer:
 
     def _sample_idx(self, L, require_kept=False):
         """
-        Picks a random start position and returns L consecutive buffer indices
-        (one sequence, as raw buffer indices).
+        Picks a random start position and returns L consecutive buffer indices (one sequence, as raw buffer indices).
 
-        The buffer is circular so indices wrap modulo size. A block is rejected
-        if it would cross the write head (self.idx), which marks the boundary
-        between the newest and oldest data. Crossing that boundary would produce
-        a sequence that is not contiguous in time — mixing recent data on one
-        side with old overwritten data on the other — corrupting the RSSM's
-        temporal rollout. We check idxs[1:] (not idxs[0]) because a sequence
-        that starts at the write head is fine; it's only dangerous if the write
-        head appears partway through or at the end of the sequence.
+        The buffer is circular so indices wrap modulo size. A block is rejected if it would cross the write head (self.idx), which marks the boundary between the newest and oldest data. Crossing that boundary would produce a sequence that is not contiguous in time — mixing recent data on one side with old overwritten data on the other — corrupting the RSSM's temporal rollout. We check idxs[1:] (not idxs[0]) because a sequence that starts at the write head is fine; it's only dangerous if the write head appears partway through or at the end of the sequence.
 
         Parameters
             L : int  – sequence length
-            require_kept : bool – if True (LoFo mode), also reject start positions whose kept value is 0.0 (discarded). Steps after the start may still be discarded; their precomputed kept values are retrieved in _retrieve_batch.
+            require_kept : bool – if True (LoFo mode), also reject start positions whose kept value 
+                            is 0.0 (discarded). Steps after the start may still be discarded; their precomputed kept values are retrieved in _retrieve_batch.
         """
         buf = self._valid_buffer_size()
         valid = False
@@ -153,7 +150,7 @@ class ReplayBuffer:
 
         Returns
             obs, acs, rews, terms — each shaped (L, n, ...) as expected by the
-            RSSM which processes time as the leading dimension.
+                                    RSSM which processes time as the leading dimension.
         """
         vec = idxs.transpose().reshape(-1)  # (L*n,) — unroll for fancy indexing
         obs = self.observations[vec].reshape(L, n, *self.obs_shape)
@@ -181,29 +178,15 @@ class ReplayBuffer:
 
     def sample(self):
         """
-        Samples self.batch_size sequences of length self.seq_len, retrieves
-        transition data (obs, actions, rewards, terminals) and the precomputed
-        per-timestep kept mask for those indices.
+        Samples self.batch_size sequences of length self.seq_len, retrieves transition data (obs, actions, rewards, terminals) and the precomputed per-timestep kept mask for those indices.
 
-        The kept mask (shape (L, n)) is stored per-transition in self.kept and
-        updated in add() — it is not computed here. Each value is 1.0 (use this
-        timestep's loss) or 0.0 (discard: zero out loss, no gradient signal).
+        The kept mask (shape (L, n)) is stored per-transition in self.kept and updated in add() — it is not computed here. Each value is 1.0 (use this timestep's loss) or 0.0 (discard: zero out loss, no gradient signal).
 
-        Note: per-timestep is equivalent to per-index even when the buffer is
-        circular. Each index always maps to exactly one valid timestep once
-        written. Circularity only invalidates certain contiguous blocks of
-        indices — specifically those that wrap around past the write head
-        (self.idx), which would mix transitions from the newest and oldest parts
-        of the buffer into a single sequence that is not contiguous in time.
+        Note: per-timestep is equivalent to per-index even when the buffer is circular. Each index always maps to exactly one valid timestep once written. Circularity only invalidates certain contiguous blocks of indices — specifically those that wrap around past the write head (self.idx), which would mix transitions from the newest and oldest parts of the buffer into a single sequence that is not contiguous in time.
 
-        In FIFO mode, sequences are drawn uniformly at random and all steps are
-        marked kept (mask all ones).
+        In FIFO mode, sequences are drawn uniformly at random and all steps are marked kept (mask all ones).
 
-        In LoFo mode, sequences are drawn uniformly at random with the additional
-        constraint that the start index must not be discarded (kept == 1.0).
-        Steps after the start may still have kept == 0.0 per their precomputed
-        values; they are included for RSSM temporal continuity but contribute no
-        gradient signal.
+        In LoFo mode, sequences are drawn uniformly at random with the additional constraint that the start index must not be discarded (kept == 1.0). Steps after the start may still have kept == 0.0 per their precomputed values; they are included for RSSM temporal continuity but contribute no gradient signal.
 
         Returns
             obs : np.ndarray, shape (L, n, *obs_shape), uint8
