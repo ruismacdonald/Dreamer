@@ -3,6 +3,10 @@ import pickle
 import json
 import torch
 import numpy as np 
+
+# Tell imageio/moviepy to use the system ffmpeg rather than trying to download one
+os.environ["IMAGEIO_FFMPEG_EXE"] = os.environ.get("IMAGEIO_FFMPEG_EXE", "ffmpeg")
+
 import moviepy.editor as mpy
 
 import matplotlib.pyplot as plt 
