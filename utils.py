@@ -4,8 +4,13 @@ import json
 import torch
 import numpy as np 
 
-# Tell imageio/moviepy to use the system ffmpeg rather than trying to download one
-os.environ["IMAGEIO_FFMPEG_EXE"] = os.environ.get("IMAGEIO_FFMPEG_EXE", "ffmpeg")
+# Point imageio's ffmpeg plugin at the system ffmpeg binary so it never tries to download one (compute nodes have no internet access)
+_ffmpeg_exe = os.environ.get("IMAGEIO_FFMPEG_EXE", "ffmpeg")
+os.environ["IMAGEIO_FFMPEG_EXE"] = _ffmpeg_exe
+
+# Patch imageio's ffmpeg download to be a no-op before importing moviepy
+import imageio.plugins.ffmpeg as _iio_ffmpeg
+_iio_ffmpeg.get_exe = lambda: _ffmpeg_exe
 
 import moviepy.editor as mpy
 
