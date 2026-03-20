@@ -6,7 +6,7 @@
 #SBATCH --exclude=ng[11105-11106,31103]
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
-#SBATCH --array=0-9
+#SBATCH --array=0-2
 #SBATCH --acctg-freq=task=1
 #SBATCH --output=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_fifo/%A-%a.out
 #SBATCH --error=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_fifo/%A-%a.err
