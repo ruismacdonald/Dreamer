@@ -2,23 +2,25 @@ import os
 import pickle
 import json
 import torch
-import numpy as np 
+import numpy as np
+import imageio
 
-# Point imageio's ffmpeg plugin at the system ffmpeg binary so it never tries to download one (compute nodes have no internet access)
-_ffmpeg_exe = os.environ.get("IMAGEIO_FFMPEG_EXE", "ffmpeg")
-os.environ["IMAGEIO_FFMPEG_EXE"] = _ffmpeg_exe
+# Tell imageio/moviepy to use the system ffmpeg (provided by module load ffmpeg/4.3.2)
+ffmpeg_exe = os.environ.get("IMAGEIO_FFMPEG_EXE", "ffmpeg")
 
-# Patch imageio's ffmpeg download to be a no-op before importing moviepy
-import imageio.plugins.ffmpeg as _iio_ffmpeg
-_iio_ffmpeg.get_exe = lambda: _ffmpeg_exe
-
+# Patch: Disable internet-based ffmpeg download (MoviePy legacy behaviour)
+if hasattr(imageio, "plugins") and hasattr(imageio.plugins, "ffmpeg"):
+    def _noop_download(*args, **kwargs):
+        # Simply return the system ffmpeg path instead of downloading anything
+        return ffmpeg_exe
+    imageio.plugins.ffmpeg.download = _noop_download
+    
 import moviepy.editor as mpy
 
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
 from typing import Iterable
 from torch.nn import Module
 from tensorboardX import SummaryWriter
-
 
 
 def get_parameters(modules: Iterable[Module]):
@@ -31,6 +33,7 @@ def get_parameters(modules: Iterable[Module]):
     for module in modules:
         model_parameters += list(module.parameters())
     return model_parameters
+
 
 class FreezeParameters:
     def __init__(self, modules: Iterable[Module]):
@@ -56,49 +59,50 @@ class FreezeParameters:
         for i, param in enumerate(get_parameters(self.modules)):
             param.requires_grad = self.param_states[i]
 
-class Logger:
 
+class Logger:
     def __init__(self, log_dir, n_logged_samples=10, summary_writer=None):
         self._log_dir = log_dir
-        print('########################')
-        print('logging outputs to ', log_dir)
-        print('########################')
+        print("########################")
+        print("logging outputs to ", log_dir)
+        print("########################")
         self._n_logged_samples = n_logged_samples
         self._summ_writer = SummaryWriter(log_dir, flush_secs=1, max_queue=1)
 
     def log_scalar(self, scalar, name, step_):
-        self._summ_writer.add_scalar('{}'.format(name), scalar, step_)
+        self._summ_writer.add_scalar("{}".format(name), scalar, step_)
 
     def log_scalars(self, scalar_dict, step):
         for key, value in scalar_dict.items():
-            print('{} : {}'.format(key, value))
+            print("{} : {}".format(key, value))
             if isinstance(value, list):
                 continue
             self.log_scalar(value, key, step)
         self.dump_scalars_to_pickle(scalar_dict, step)
 
     def log_videos(
-            self, videos, step, max_videos_to_save=1, fps=20, video_title='video'
-        ):
+        self, videos, step, max_videos_to_save=1, fps=20, video_title="video"
+    ):
 
         # max rollout length
         max_videos_to_save = np.min([max_videos_to_save, videos.shape[0]])
         max_length = videos[0].shape[0]
         for i in range(max_videos_to_save):
-            if videos[i].shape[0]>max_length:
+            if videos[i].shape[0] > max_length:
                 max_length = videos[i].shape[0]
 
         # pad rollouts to all be same length
         for i in range(max_videos_to_save):
-            if videos[i].shape[0]<max_length:
-                padding = np.tile([videos[i][-1]], (max_length-videos[i].shape[0],1,1,1))
+            if videos[i].shape[0] < max_length:
+                padding = np.tile(
+                    [videos[i][-1]], (max_length - videos[i].shape[0], 1, 1, 1)
+                )
                 videos[i] = np.concatenate([videos[i], padding], 0)
 
             clip = mpy.ImageSequenceClip(list(videos[i]), fps=fps)
             new_video_title = video_title + "{}_{}".format(step, i) + ".gif"
             filename = os.path.join(self._log_dir, new_video_title)
-            clip.write_gif(filename, fps =fps)
-
+            clip.write_gif(filename, fps=fps)
 
     def dump_scalars_to_pickle(self, metrics, step, log_title=None):
         log_path = os.path.join(
@@ -110,15 +114,16 @@ class Logger:
     def flush(self):
         self._summ_writer.flush()
 
+
 def compute_return(rewards, values, discounts, td_lam, last_value):
 
-    next_values = torch.cat([values[1:], last_value.unsqueeze(0)],0)  
-    targets = rewards + discounts * next_values * (1-td_lam)
-    rets =[]
+    next_values = torch.cat([values[1:], last_value.unsqueeze(0)], 0)
+    targets = rewards + discounts * next_values * (1 - td_lam)
+    rets = []
     last_rew = last_value
 
-    for t in range(rewards.shape[0]-1, -1, -1):
-        last_rew = targets[t] + discounts[t] * td_lam *(last_rew)
+    for t in range(rewards.shape[0] - 1, -1, -1):
+        last_rew = targets[t] + discounts[t] * td_lam * (last_rew)
         rets.append(last_rew)
 
     returns = torch.flip(torch.stack(rets), [0])
