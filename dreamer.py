@@ -185,8 +185,7 @@ class Dreamer:
         
         # Obs loss
         # obs_dist.log_prob: (L-1, n, C, H, W) -> sum over pixels, mask over steps
-        obs_log_prob = obs_dist.log_prob(obs[1:])  # (L-1, n, C, H, W)
-        obs_log_prob = obs_log_prob.sum(dim=[-3, -2, -1])  # (L-1, n)
+        obs_log_prob = obs_dist.log_prob(obs[1:])  # (L-1, n) — Independent already sums C,H,W
         obs_loss = -(obs_log_prob * kept_steps.squeeze(-1)).sum() / n_kept
 
         # Reward loss
@@ -230,7 +229,10 @@ class Dreamer:
 
         discounts = torch.cat([torch.ones_like(discounts[:1]), discounts[1:-1]], 0)
         self.discounts = torch.cumprod(discounts, 0).detach()
-        actor_loss = -torch.mean(self.discounts * self.returns)
+        _, action_dist = self.actor(self.imag_feat)  # The distribution, not the sampled action
+        entropy = action_dist.entropy()  # (horizon, batch)
+        actor_loss = -torch.mean(self.discounts * (self.returns + 1e-4 * entropy[:-1]))
+
         return actor_loss
 
     def value_loss(self):
@@ -281,7 +283,11 @@ class Dreamer:
         obs_embed = self.obs_encoder(preprocess_obs(obs))
         _, posterior = self.rssm.observe_step(prev_state, prev_action, obs_embed)
         features = torch.cat([posterior['stoch'], posterior['deter']], dim=-1)
-        action = self.actor(features, deter=not explore) 
+        result = self.actor(features, deter=not explore) 
+        if isinstance(result, tuple):
+            action, _ = result  # Discard dist, only need action here
+        else:
+            action = result  # deter=True returns mode directly, not a tuple
         if explore:
             action = self.actor.add_exploration(action, self.args.action_noise)
 

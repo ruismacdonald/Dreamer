@@ -1,3 +1,5 @@
+from math import e
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -101,7 +103,7 @@ class RSSM(nn.Module):
         next_states = []
 
         for t in range(horizon):
-            action = actor(torch.cat([rssm_state['stoch'], rssm_state['deter']], dim=-1).detach())
+            action, _ = actor(torch.cat([rssm_state['stoch'], rssm_state['deter']], dim=-1).detach())
             rssm_state = self.imagine_step(rssm_state, action)
             next_states.append(rssm_state)
 
@@ -277,15 +279,13 @@ class ActionDecoder(nn.Module):
         action_mean = self._mean_scale * torch.tanh(mean / self._mean_scale)
         action_std = F.softplus(std + raw_init_std) + self._min_std
 
-        dist = distributions.Normal(action_mean, action_std)
-        dist = TransformedDistribution(dist, TanhBijector())
-        dist = distributions.independent.Independent(dist, 1)
+        dist = distributions.independent.Independent(TransformedDistribution(distributions.Normal(action_mean, action_std), TanhBijector()), 1)
         dist = SampleDist(dist)
-
         if deter:
             return dist.mode()
-        else:
-            return dist.rsample()
+        
+        action = dist.rsample()
+        return action, dist
 
     def add_exploration(self, action, action_noise=0.3):
 
