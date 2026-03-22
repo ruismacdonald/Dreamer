@@ -231,7 +231,8 @@ class Dreamer:
         self.discounts = torch.cumprod(discounts, 0).detach()
         _, action_dist = self.actor(self.imag_feat)  # The distribution, not the sampled action
         entropy = action_dist.entropy()  # (horizon, batch)
-        actor_loss = -torch.mean(self.discounts * (self.returns + 1e-4 * entropy[:-1]))
+        # self.discounts: (14, 2450, 1), self.returns: (14, 2450, 1), entropy[:-1].unsqueeze(-1): (14, 2450, 1)
+        actor_loss = -torch.mean(self.discounts * (self.returns + 1e-4 * entropy[:-1].unsqueeze(-1)))
 
         return actor_loss
 
