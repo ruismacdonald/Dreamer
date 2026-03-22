@@ -127,11 +127,11 @@ class SimpleContrastiveStateDistanceModel:
 
     def prepare_train_loader(self, data):
         observation_pairs = []
-        for i in range(data["observation"].shape[0] - 1):
-            if data["terminal"][i]:
+        for i in range(data["observations"].shape[0] - 1):
+            if data["terminals"][i]:
                 continue
             observation_pairs.append(
-                (data["observation"][i], data["observation"][i + 1])
+                (data["observations"][i], data["observations"][i + 1])
             )
         train_dataset = ContrastiveStateDistanceDataset(
             observation_pairs, self._num_negative_samples
