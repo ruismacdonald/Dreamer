@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from collections import deque
 
 
@@ -91,6 +92,8 @@ class ReplayBuffer:
         if self.distance_process:
             self.kept[self.idx] = 1.0
             if representation is not None:
+                if isinstance(representation, torch.Tensor):
+                    representation = representation.detach().cpu().numpy()
                 self.representations[self.idx] = representation
                 
                 # Compute distances from new transition to all valid stored transitions
@@ -232,6 +235,37 @@ class ReplayBuffer:
             'buffer_episodes': self.episodes,
         }
 
+    def save(self, dname, fname='replay_buffer.pkl'):
+        import pickle, os
+        os.makedirs(dname, exist_ok=True)
+        payload = {
+            'idx': self.idx, 'full': self.full,
+            'steps': self.steps, 'episodes': self.episodes,
+            'observations': self.observations, 'actions': self.actions,
+            'rewards': self.rewards, 'terminals': self.terminals,
+        }
+        if self.distance_process:
+            payload.update({
+                'representations': self.representations,
+                'kept': self.kept,
+                'repr_filled': self.repr_filled,
+            })
+        with open(os.path.join(dname, fname), 'wb') as f:
+            pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def load(self, dname, fname='replay_buffer.pkl'):
+        import pickle, os
+        with open(os.path.join(dname, fname), 'rb') as f:
+            p = pickle.load(f)
+        self.idx = p['idx']; self.full = p['full']
+        self.steps = p['steps']; self.episodes = p['episodes']
+        self.observations = p['observations']; self.actions = p['actions']
+        self.rewards = p['rewards']; self.terminals = p['terminals']
+        if self.distance_process:
+            self.representations = p['representations']
+            self.kept = p['kept']
+            self.repr_filled = p['repr_filled']
+
 
 class ReplayBufferLoFoV2:
     """
@@ -368,6 +402,8 @@ class ReplayBufferLoFoV2:
         self.insert_id[i] = self._global_insert_id
 
         # Add to per-hash FIFO and evict if over capacity
+        if isinstance(representation, torch.Tensor):
+            representation = representation.detach().cpu().numpy()
         key = self._hash_key(representation)
         fifo = self.hash_fifos.setdefault(key, deque())
         self._flat_add(i)
@@ -448,3 +484,32 @@ class ReplayBufferLoFoV2:
             'fifo_size_mean': float(np.mean(fifo_sizes)) if fifo_sizes else 0.0,
             'fifo_size_max': int(np.max(fifo_sizes))   if fifo_sizes else 0,
         }
+    
+    def save(self, dname, fname='replay_buffer.pkl'):
+        import pickle, os
+        os.makedirs(dname, exist_ok=True)
+        payload = {
+            'idx': self.idx, 'full': self.full,
+            'steps': self.steps, 'episodes': self.episodes,
+            'observations': self.observations, 'actions': self.actions,
+            'rewards': self.rewards, 'terminals': self.terminals,
+            'kept': self.kept, 'insert_id': self.insert_id,
+            '_global_insert_id': self._global_insert_id,
+            'kept_flat': self.kept_flat, 'flat_pos': self.flat_pos,
+            'hash_fifos': self.hash_fifos,
+        }
+        with open(os.path.join(dname, fname), 'wb') as f:
+            pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def load(self, dname, fname='replay_buffer.pkl'):
+        import pickle, os
+        with open(os.path.join(dname, fname), 'rb') as f:
+            p = pickle.load(f)
+        self.idx = p['idx']; self.full = p['full']
+        self.steps = p['steps']; self.episodes = p['episodes']
+        self.observations = p['observations']; self.actions = p['actions']
+        self.rewards = p['rewards']; self.terminals = p['terminals']
+        self.kept = p['kept']; self.insert_id = p['insert_id']
+        self._global_insert_id = p['_global_insert_id']
+        self.kept_flat = p['kept_flat']; self.flat_pos = p['flat_pos']
+        self.hash_fifos = p['hash_fifos']

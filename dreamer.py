@@ -509,6 +509,10 @@ def main():
     parser.add_argument("--loca-hash-size",  type=int, default=32)
     parser.add_argument("--normalize-reprs", action="store_true")
 
+    # Resume at start of Phase 2
+    parser.add_argument("--resume-steps", type=int, default=0)
+    parser.add_argument("--distance-model-path", type=str, default="")
+
     args = parser.parse_args()
 
     data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data/')
@@ -521,6 +525,9 @@ def main():
             args.loca_phase1_steps + args.loca_phase2_steps + args.loca_phase3_steps
         )
         loca_phase = "phase_1"
+        # If resuming at phase 2, skip directly to phase 2 setup
+        if args.restore and args.resume_steps >= args.loca_phase1_steps:
+            loca_phase = "phase_2"
     else:
         total_steps = args.loca_phase1_steps
         loca_phase = "phase_1"
@@ -554,38 +561,57 @@ def main():
     logger = Logger(logdir)
 
     if args.loca_state_distance or args.loca_state_distance_v2:
-        print("Start state distance learning process.")
-        num_state_distance_steps = 100000
-        _ = dreamer.collect_random_episodes(
-            train_env, num_state_distance_steps // args.action_repeat
-        )
-
-        print("Start training state distance model.")
         state_distance_model = SimpleContrastiveStateDistanceModel(
             obs_shape, torch.optim.Adam, normalize_reprs=args.normalize_reprs, device=device
         )
-        state_distance_model.train(dreamer.data_buffer.get_data())
 
-        ckpt_dir = os.path.join(logdir, "ckpts/")
-        if not (os.path.exists(ckpt_dir)):
-            os.makedirs(ckpt_dir)
-        state_distance_model.save(ckpt_dir)
-        print("Finished state distance learning process.")
-        dreamer = Dreamer(
-            args,
-            obs_shape,
-            action_size,
-            device,
-            args.restore,
-            loca_state_distance=args.loca_state_distance,
-            loca_state_distance_v2=args.loca_state_distance_v2,
-            state_distance_model=state_distance_model,
-        )
+        if args.restore and args.distance_model_path:
+            # Resume from phase 1 checkpoint — load SDM and buffer, skip collection
+            state_distance_model.load(args.distance_model_path)
+            print(f"Loaded state distance model from {args.distance_model_path}")
+            dreamer = Dreamer(
+                args, obs_shape, action_size, device, args.restore,
+                loca_state_distance=args.loca_state_distance,
+                loca_state_distance_v2=args.loca_state_distance_v2,
+                state_distance_model=state_distance_model,
+            )
+            buf_fname = 'replay_buffer_phase_1.pkl'
+            dreamer.data_buffer.load(args.distance_model_path, fname=buf_fname)
+            dreamer.data_buffer.steps = args.resume_steps // args.action_repeat
+            print(f"Loaded replay buffer from {args.distance_model_path}/{buf_fname}")
+        else:
+            # Fresh run — collect, train, save
+            print("Start state distance learning process.")
+            num_state_distance_steps = 100000
+            _ = dreamer.collect_random_episodes(
+                train_env, num_state_distance_steps // args.action_repeat
+            )
+
+            print("Start training state distance model.")
+            state_distance_model.train(dreamer.data_buffer.get_data())
+            ckpt_dir = os.path.join(logdir, "ckpts/")
+            if not (os.path.exists(ckpt_dir)):
+                os.makedirs(ckpt_dir)
+            state_distance_model.save(ckpt_dir)
+            print("Finished state distance learning process.")
+            dreamer = Dreamer(
+                args,
+                obs_shape,
+                action_size,
+                device,
+                args.restore,
+                loca_state_distance=args.loca_state_distance,
+                loca_state_distance_v2=args.loca_state_distance_v2,
+                state_distance_model=state_distance_model,
+            )
 
     if args.train:
         initial_logs = OrderedDict()
         seed_episode_rews = dreamer.collect_random_episodes(train_env, args.seed_steps//args.action_repeat)
         global_step = dreamer.data_buffer.steps * args.action_repeat
+        # If resuming, override with resume_steps so phase switching triggers correctly
+        if args.restore and args.resume_steps > 0:
+            global_step = args.resume_steps
 
         # without loss of generality intial rews for both train and eval are assumed same
         initial_logs.update({
@@ -627,7 +653,7 @@ def main():
                 if not (os.path.exists(ckpt_dir)):
                     os.makedirs(ckpt_dir)
                 dreamer.save(os.path.join(ckpt_dir, f"models_{loca_phase}.pt"))
-
+                dreamer.data_buffer.save(ckpt_dir, fname='replay_buffer_phase_1.pkl')
                 loca_phase = "phase_2"
                 train_env = make_env(args, loca_phase, "train")
                 test_env = make_env(args, loca_phase, "eval")
