@@ -13,7 +13,7 @@ import torch.distributions as distributions
 from collections import OrderedDict
 
 import env_wrapper
-from replay_buffer import ReplayBuffer
+from replay_buffer import ReplayBuffer, ReplayBufferLoFoV2
 from models import RSSM, ConvEncoder, ConvDecoder, DenseDecoder, ActionDecoder
 from state_distance import SimpleContrastiveStateDistanceModel
 from utils import *
@@ -38,7 +38,7 @@ def preprocess_obs(obs):
 
 class Dreamer:
 
-    def __init__(self, args, obs_shape, action_size, device, restore=False, loca_state_distance=False, state_distance_model=None,):
+    def __init__(self, args, obs_shape, action_size, device, restore=False, loca_state_distance=False, loca_state_distance_v2=False, state_distance_model=None,):
 
         self.args = args
         self.obs_shape = obs_shape
@@ -48,6 +48,7 @@ class Dreamer:
         self.restore_path = args.checkpoint_path
 
         self.loca_state_distance = loca_state_distance
+        self.loca_state_distance_v2 = loca_state_distance_v2
         self.state_distance_model = None
         if self.loca_state_distance:
             self.data_buffer = ReplayBuffer(
@@ -61,6 +62,16 @@ class Dreamer:
                 obs_repr_count=args.loca_replay_count,
             )
             self.state_distance_model = state_distance_model
+        elif self.loca_state_distance_v2:
+            self.data_buffer = ReplayBufferLoFoV2(
+                self.args.buffer_size, 
+                self.obs_shape, 
+                self.action_size,
+                self.args.train_seq_len, 
+                self.args.batch_size,
+                obs_hash_count=args.loca_hash_count,
+                obs_hash_size=args.loca_hash_size,
+            )
         else:
             self.data_buffer = ReplayBuffer(
                 self.args.buffer_size, 
@@ -310,7 +321,7 @@ class Dreamer:
             action = action[0].cpu().numpy()
             next_obs, rew, done, _ = env.step(action)
             representation = None
-            if self.loca_state_distance:
+            if self.loca_state_distance or self.loca_state_distance_v2:
                 representation = self.state_distance_model.get_representation(
                     preprocess_obs(torch.tensor(obs["image"], dtype=torch.float32).unsqueeze(0))
                 )
@@ -370,7 +381,7 @@ class Dreamer:
             next_obs, rew, done, _ = env.step(action)
             
             representation = None
-            if self.loca_state_distance:
+            if self.loca_state_distance or self.loca_state_distance_v2:
                 representation = self.state_distance_model.get_representation(
                     preprocess_obs(torch.tensor(obs["image"], dtype=torch.float32).unsqueeze(0))
                 )
@@ -486,11 +497,17 @@ def main():
     parser.add_argument("--loca-phase2-steps", type=int, default=0, help="")
     parser.add_argument("--loca-phase3-steps", type=int, default=0, help="")
 
+    # LoFoV1 parameters
     parser.add_argument("--loca-state-distance", action="store_true", help="")
     parser.add_argument("--loca-replay-rad", type=float, default=0.05)
     parser.add_argument("--loca-replay-count", type=int, default=10, help="")  
     # Changed default value from 2 to 10 since is what Ali used in paper
 
+    # LoFoV2 parameters
+    parser.add_argument("--loca-state-distance-v2", action="store_true", help="Use LoFoV2 buffer")
+    parser.add_argument("--loca-hash-count", type=int, default=2000)
+    parser.add_argument("--loca-hash-size",  type=int, default=32)
+    parser.add_argument("--normalize-reprs", action="store_true")
 
     args = parser.parse_args()
 
@@ -536,7 +553,7 @@ def main():
 
     logger = Logger(logdir)
 
-    if args.loca_state_distance:
+    if args.loca_state_distance or args.loca_state_distance_v2:
         print("Start state distance learning process.")
         num_state_distance_steps = 100000
         _ = dreamer.collect_random_episodes(
@@ -545,7 +562,7 @@ def main():
 
         print("Start training state distance model.")
         state_distance_model = SimpleContrastiveStateDistanceModel(
-            obs_shape, torch.optim.Adam, device=device
+            obs_shape, torch.optim.Adam, normalize_reprs=args.normalize_reprs, device=device
         )
         state_distance_model.train(dreamer.data_buffer.get_data())
 
@@ -560,7 +577,8 @@ def main():
             action_size,
             device,
             args.restore,
-            loca_state_distance=True,
+            loca_state_distance=args.loca_state_distance,
+            loca_state_distance_v2=args.loca_state_distance_v2,
             state_distance_model=state_distance_model,
         )
 

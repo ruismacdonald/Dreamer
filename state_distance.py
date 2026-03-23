@@ -65,10 +65,10 @@ class ContrastiveStateDistanceNet(nn.Module):
         self.conv = torch.nn.Sequential(*conv_seq)
 
         mlp_in_dim = calculate_output_dim(self.conv, in_dim)
-        mlp_modules = [nn.Linear(np.prod(mlp_in_dim), mlp_layers[0]), torch.nn.ReLU()]
+        mlp_modules = [nn.Linear(np.prod(mlp_in_dim), mlp_layers[0]), torch.nn.Tanh()]
         for i in range(len(mlp_layers) - 2):
             mlp_modules.append(nn.Linear(mlp_layers[i], mlp_layers[i + 1]))
-            mlp_modules.append(torch.nn.ReLU())
+            mlp_modules.append(torch.nn.Tanh())
         mlp_modules.append(nn.Linear(mlp_layers[-2], mlp_layers[-1]))
         self.mlp = torch.nn.Sequential(*mlp_modules)
 
@@ -104,6 +104,7 @@ class SimpleContrastiveStateDistanceModel:
         num_negative_samples=128,
         num_training_epochs=5,
         batch_size=32,
+        normalize_reprs=False,
         device: str = "cuda",
     ):
 
@@ -124,6 +125,10 @@ class SimpleContrastiveStateDistanceModel:
         self._num_negative_samples = int(num_negative_samples)
         self._num_training_epochs = int(num_training_epochs)
         self._batch_size = int(batch_size)
+
+        self._normalize_reprs = normalize_reprs
+        self._repr_mean = None
+        self._repr_std = None
 
     def prepare_train_loader(self, data):
         observation_pairs = []
@@ -161,8 +166,8 @@ class SimpleContrastiveStateDistanceModel:
         )
         return loss
 
-    def train(self, data):
-        train_loader = self.prepare_train_loader(data)
+    def train(self, buffer_data):
+        train_loader = self.prepare_train_loader(buffer_data)
         self._representation_net.train()
         for _ in range(self._num_training_epochs):
             running_loss, dataset_size = 0, 0
@@ -183,17 +188,34 @@ class SimpleContrastiveStateDistanceModel:
             # TODO log things somehow :D
 
         self._representation_net.eval()
+        self.learn_reprs_stats(buffer_data)
+    
+    @torch.no_grad()
+    def learn_reprs_stats(self, data):
+        if not self._normalize_reprs:
+            return
+        obs = torch.as_tensor(data["observations"], device=self._device).float()
+        self._representation_net.eval()
+        reprs = self._representation_net(obs).detach().cpu().numpy()
+        self._repr_mean = reprs.mean(axis=0)
+        self._repr_std = reprs.std(axis=0) + 1e-8
 
     @torch.no_grad()
     def get_representation(self, obs):
         obs = obs.clone().to(device=self._device)
-        return self._representation_net(obs).squeeze(0).detach().cpu()
+        reprs = self._representation_net(obs).squeeze(0).detach().cpu().numpy()
+        if self._normalize_reprs and self._repr_mean is not None:
+            reprs = (reprs - self._repr_mean) / self._repr_std
+        return reprs
 
     def save(self, dname):
         torch.save(
             {
                 "representation_net": self._representation_net.state_dict(),
                 "optimizer": self._optimizer.state_dict(),
+                "repr_mean": self._repr_mean,
+                "repr_std": self._repr_std,
+                "normalize_reprs": self._normalize_reprs,
             },
             os.path.join(dname, "distance_model.pt"),
         )
@@ -202,3 +224,6 @@ class SimpleContrastiveStateDistanceModel:
         checkpoint = torch.load(os.path.join(dname, "distance_model.pt"))
         self._representation_net.load_state_dict(checkpoint["representation_net"])
         self._optimizer.load_state_dict(checkpoint["optimizer"])
+        self._repr_mean = checkpoint.get("repr_mean", None)
+        self._repr_std = checkpoint.get("repr_std", None)
+        self._normalize_reprs = checkpoint.get("normalize_reprs", self._normalize_reprs)
