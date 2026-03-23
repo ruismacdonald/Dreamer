@@ -99,6 +99,7 @@ class ReplayBuffer:
                 # Compute distances from new transition to all valid stored transitions
                 buf = self._valid_buffer_size()  # Call before incrementing idx
                 reprs = self.representations[:buf]  # (buf, repr_size)
+                # L2 (Euclidean) distance: sqrt(sum of squared differences) per stored transition
                 dists = np.linalg.norm(reprs - representation, axis=-1)  # (buf,)
                 
                 # Find all transitions in the local neighbourhood

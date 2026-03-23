@@ -72,6 +72,7 @@ class Dreamer:
                 obs_hash_count=args.loca_hash_count,
                 obs_hash_size=args.loca_hash_size,
             )
+            self.state_distance_model = state_distance_model
         else:
             self.data_buffer = ReplayBuffer(
                 self.args.buffer_size, 
