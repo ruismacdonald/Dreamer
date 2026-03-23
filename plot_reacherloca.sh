@@ -16,7 +16,7 @@ module load StdEnv/2020
 module load glfw/3.3.2
 source ~/projects/def-rsdjjana/ruism/loca_env/bin/activate
 
-cd ~/projects/def-rsdjjana/ruism/Dreamer_v1
+cd ~/projects/def-rsdjjana/ruism/Dreamer
 
 export OMP_NUM_THREADS=1
 export OMP_DYNAMIC=FALSE
