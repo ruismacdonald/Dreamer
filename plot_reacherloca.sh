@@ -31,16 +31,17 @@ export NUMEXPR_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 
 python plot_reacherloca.py \
-  --indir  data/reacherloca_fifo/ \
+  --indir  data/reacherloca_fifo/ data/reacherloca_v1/ \
   --outdir results/reacherloca \
   --subdir False \
   --xaxis step \
   --yaxis eval_avg_reward \
   --bins 40000 \
-  --methods reacherloca_fifo \
+  --methods reacherloca_fifo reacherloca_v1 \
   --add none \
   --labels \
-    reacherloca_fifo "DreamerV2 + FIFO"
+    reacherloca_fifo "DreamerV2 + FIFO" \
+    reacherloca_v1 "DreamerV2 + LoFoV1"
 
 # python plot_reacherloca.py \
 #   --indir  data/reacherloca_fifo_10seeds_save/ data/reacherloca_v1_10seeds_save/ ../Dreamer_v2_SDH/data/reacherloca_v2_state_dist_10_seeds/ ../Dreamer_v2_SDH/data/reacherloca_v2_rep_norm_state_dist_10_seeds/ \
