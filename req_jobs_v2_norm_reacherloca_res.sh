@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=d_v2_r_norm_res
 #SBATCH --account=def-rsdjjana_gpu
-#SBATCH --time=6-23:59:59
+#SBATCH --time=3-00:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --exclude=ng[11105-11106,31103]
 #SBATCH --cpus-per-task=4
