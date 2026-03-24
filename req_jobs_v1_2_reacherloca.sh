@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=d_v1_r
+#SBATCH --job-name=d_v1_r_2
 #SBATCH --account=def-rsdjjana_gpu
 #SBATCH --time=6-23:59:59
 #SBATCH --gres=gpu:1
@@ -8,13 +8,13 @@
 #SBATCH --mem=32G
 #SBATCH --array=0-2
 #SBATCH --acctg-freq=task=1
-#SBATCH --output=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1/%A-%a.out
-#SBATCH --error=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1/%A-%a.err
+#SBATCH --output=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1_2/%A-%a.out
+#SBATCH --error=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1_2/%A-%a.err
 
 set -e -o pipefail
 
 # Top-level results dir on Lustre
-BASE_SAVE_DIR="$HOME/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1"
+BASE_SAVE_DIR="$HOME/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1_2"
 mkdir -p "$BASE_SAVE_DIR"
 
 # Gentle stagger so all tasks don’t hammer Lustre at once
@@ -75,13 +75,14 @@ cd "$RUN_DIR"
 python -u "$DREAMER_SRC/dreamer.py" \
   --env 'reacherloca-easy' \
   --algo 'Dreamerv2' \
-  --exp-name 'reacherloca_v1' \
+  --exp-name 'reacherloca_v1_2' \
   --train \
   --loca-all-phases \
   --loca-phase1-steps 1000000 \
   --loca-phase2-steps 1500000 \
   --loca-phase3-steps 0 \
   --loca-state-distance \
+  --loca-replay-count 2 \
   --seed "${SEED}"
 
 rsync -a --partial --inplace --no-whole-file "$RUN_DIR/" "$FINAL_DIR/"

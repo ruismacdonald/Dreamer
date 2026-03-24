@@ -234,6 +234,7 @@ class ReplayBuffer:
             'buffer_size': buf,
             'buffer_steps': self.steps,
             'buffer_episodes': self.episodes,
+            'kept_fraction': float(self.kept[:buf].mean()) if self.distance_process else 1.0,
         }
 
     def save(self, dname, fname='replay_buffer.pkl'):
