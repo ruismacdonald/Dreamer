@@ -89,7 +89,6 @@ python -u "$DREAMER_SRC/dreamer.py" \
   --resume-steps 1000000 \
   --distance-model-path "$SDM_DIR" \
   --loca-state-distance-v2 \
-  --normalize-reprs \
   --seed "${SEED}"
 
 rsync -a --partial --inplace --no-whole-file "$RUN_DIR/" "$FINAL_DIR/"
