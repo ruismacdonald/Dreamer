@@ -176,7 +176,7 @@ class ReplayBuffer:
         if not self.distance_process:
             return False
         if not self.repr_filled:
-            self.repr_filled = self.full
+            self.repr_filled = self.steps > 10000
         return self.repr_filled
 
     # Sampling

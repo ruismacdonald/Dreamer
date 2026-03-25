@@ -83,6 +83,8 @@ python -u "$DREAMER_SRC/dreamer.py" \
   --loca-phase3-steps 0 \
   --loca-state-distance-v2 \
   --normalize-reprs \
+  --loca-hash-size 64 \
+  --loca-hash-count 500 \
   --seed "${SEED}"
 
 rsync -a --partial --inplace --no-whole-file "$RUN_DIR/" "$FINAL_DIR/"
