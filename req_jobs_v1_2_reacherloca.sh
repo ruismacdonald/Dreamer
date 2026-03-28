@@ -3,7 +3,7 @@
 #SBATCH --account=def-rsdjjana_gpu
 #SBATCH --time=3-00:00:00
 #SBATCH --gres=gpu:1
-#SBATCH --exclude=ng[11105-11106,31103]
+#SBATCH --exclude=ng[11105-11106,30708,31103]
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --array=0-2
