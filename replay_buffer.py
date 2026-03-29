@@ -102,6 +102,11 @@ class ReplayBuffer:
                 # L2 (Euclidean) distance: sqrt(sum of squared differences) per stored transition
                 dists = np.linalg.norm(reprs - representation, axis=-1)  # (buf,)
                 
+                if self.steps < 100000 and self.steps % 10000 == 0:
+                    print(f"[LoFo diag] step={self.steps} dist_mean={dists.mean():.4f} "
+                        f"p10={np.percentile(dists,10):.4f} p20={np.percentile(dists,20):.4f} "
+                        f"p50={np.percentile(dists,50):.4f}")
+                    
                 # Find all transitions in the local neighbourhood
                 neighbours = np.where(dists <= self.obs_repr_rad)[0]  # Indices within D_local
                 
@@ -477,6 +482,8 @@ class ReplayBufferLoFoV2:
 
     def report_statistics(self):
         fifo_sizes = [len(dq) for dq in self.hash_fifos.values()]
+        n_full = sum(1 for s in fifo_sizes if s >= self.obs_hash_count)
+        n_evicting = sum(1 for s in fifo_sizes if s > self.obs_hash_count)
         return {
             'buffer_size': self._valid_buffer_size(),
             'buffer_steps': self.steps,
@@ -485,6 +492,9 @@ class ReplayBufferLoFoV2:
             'kept_starts': len(self.kept_flat),
             'fifo_size_mean': float(np.mean(fifo_sizes)) if fifo_sizes else 0.0,
             'fifo_size_max': int(np.max(fifo_sizes))   if fifo_sizes else 0,
+            'fifo_n_full': n_full,  # How many regions have hit the cap
+            'fifo_n_evicting': n_evicting,  # How many regions are evicting
+            'kept_fraction': len(self.kept_flat) / self._valid_buffer_size() if self._valid_buffer_size() > 0 else 1.0,
         }
     
     def save(self, dname, fname='replay_buffer.pkl'):

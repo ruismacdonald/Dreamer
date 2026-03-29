@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=d_v1_r_2
+#SBATCH --job-name=d_v1_r_rad_2
 #SBATCH --account=def-rsdjjana_gpu
 #SBATCH --time=1-18:00:00
 #SBATCH --gres=gpu:1
@@ -8,13 +8,13 @@
 #SBATCH --mem=32G
 #SBATCH --array=0-2
 #SBATCH --acctg-freq=task=1
-#SBATCH --output=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1_2/%A-%a.out
-#SBATCH --error=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1_2/%A-%a.err
+#SBATCH --output=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1_rad_2/%A-%a.out
+#SBATCH --error=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1_rad_2/%A-%a.err
 
 set -e -o pipefail
 
 # Top-level results dir on Lustre
-BASE_SAVE_DIR="$HOME/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1_2"
+BASE_SAVE_DIR="$HOME/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1_rad_2"
 mkdir -p "$BASE_SAVE_DIR"
 
 # Gentle stagger so all tasks don’t hammer Lustre at once
@@ -66,7 +66,7 @@ export PYTHONPATH="$DREAMER_SRC:${PYTHONPATH:-}"
 : "${SLURM_TMPDIR:=/tmp}"
 SEED="${SLURM_ARRAY_TASK_ID}"
 
-RUN_DIR="${SLURM_TMPDIR}/dreamer-v1-r-${SLURM_JOB_ID:-0}-${SEED}"
+RUN_DIR="${SLURM_TMPDIR}/dreamer-v1-r-rad-2-${SLURM_JOB_ID:-0}-${SEED}"
 FINAL_DIR="${BASE_SAVE_DIR}/${SEED}"
 mkdir -p "$RUN_DIR" "$FINAL_DIR"
 
@@ -75,7 +75,7 @@ cd "$RUN_DIR"
 python -u "$DREAMER_SRC/dreamer.py" \
   --env 'reacherloca-easy' \
   --algo 'Dreamerv2' \
-  --exp-name 'reacherloca_v1_2' \
+  --exp-name 'reacherloca_v1_rad_2' \
   --train \
   --loca-all-phases \
   --loca-phase1-steps 1000000 \
@@ -83,6 +83,7 @@ python -u "$DREAMER_SRC/dreamer.py" \
   --loca-phase3-steps 0 \
   --loca-state-distance \
   --loca-replay-count 2 \
+  --loca-replay-rad 2.0 \
   --seed "${SEED}"
 
 rsync -a --partial --inplace --no-whole-file "$RUN_DIR/" "$FINAL_DIR/"

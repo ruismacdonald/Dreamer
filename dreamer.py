@@ -500,7 +500,7 @@ def main():
 
     # LoFoV1 parameters
     parser.add_argument("--loca-state-distance", action="store_true", help="")
-    parser.add_argument("--loca-replay-rad", type=float, default=0.1)
+    parser.add_argument("--loca-replay-rad", type=float, default=1.0)
     parser.add_argument("--loca-replay-count", type=int, default=10, help="")  
     # Changed default value from 2 to 10 since is what Ali used in paper
 
