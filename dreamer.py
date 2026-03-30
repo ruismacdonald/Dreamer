@@ -332,7 +332,11 @@ class Dreamer:
                 representation = self.state_distance_model.get_representation(
                     preprocess_obs(torch.tensor(obs["image"], dtype=torch.float32).unsqueeze(0))
                 )
-            self.data_buffer.add(obs, action, rew, done, representation, phase=getattr(self, 'current_phase', 1))
+            # self.data_buffer.add(obs, action, rew, done, representation, phase=getattr(self, 'current_phase', 1))
+            if self.loca_state_distance_v2:
+                self.data_buffer.add(obs, action, rew, done, representation, phase=getattr(self, 'current_phase', 1))
+            else:
+                self.data_buffer.add(obs, action, rew, done, representation)
 
             episode_rewards[-1] += rew
 
@@ -392,7 +396,11 @@ class Dreamer:
                 representation = self.state_distance_model.get_representation(
                     preprocess_obs(torch.tensor(obs["image"], dtype=torch.float32).unsqueeze(0))
                 )
-            self.data_buffer.add(obs, action, rew, done, representation, phase=getattr(self, 'current_phase', 1))
+            # self.data_buffer.add(obs, action, rew, done, representation, phase=getattr(self, 'current_phase', 1))
+            if self.loca_state_distance_v2:
+                self.data_buffer.add(obs, action, rew, done, representation, phase=getattr(self, 'current_phase', 1))
+            else:
+                self.data_buffer.add(obs, action, rew, done, representation)
             seed_episode_rews[-1] += rew
             if done:
                 obs = env.reset()
