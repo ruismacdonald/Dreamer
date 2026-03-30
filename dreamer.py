@@ -275,6 +275,12 @@ class Dreamer:
         nn.utils.clip_grad_norm_(self.world_model_params, self.args.grad_clip_norm)
         self.world_model_opt.step()
 
+        if self.data_buffer.steps % 50000 == 0:
+            print(f"[batch diag] step={self.data_buffer.steps} "
+                f"rew_mean={rews.mean().item():.4f} "
+                f"rew_max={rews.max().item():.4f} "
+                f"kept_mean={kept.mean().item():.4f}")
+
         actor_loss = self.actor_loss()
         self.actor_opt.zero_grad()
         actor_loss.backward()
@@ -326,7 +332,7 @@ class Dreamer:
                 representation = self.state_distance_model.get_representation(
                     preprocess_obs(torch.tensor(obs["image"], dtype=torch.float32).unsqueeze(0))
                 )
-            self.data_buffer.add(obs, action, rew, done, representation)
+            self.data_buffer.add(obs, action, rew, done, representation, phase=getattr(self, 'current_phase', 1))
 
             episode_rewards[-1] += rew
 
@@ -386,7 +392,7 @@ class Dreamer:
                 representation = self.state_distance_model.get_representation(
                     preprocess_obs(torch.tensor(obs["image"], dtype=torch.float32).unsqueeze(0))
                 )
-            self.data_buffer.add(obs, action, rew, done, representation)
+            self.data_buffer.add(obs, action, rew, done, representation, phase=getattr(self, 'current_phase', 1))
             seed_episode_rews[-1] += rew
             if done:
                 obs = env.reset()
@@ -656,6 +662,7 @@ def main():
                 dreamer.save(os.path.join(ckpt_dir, f"models_{loca_phase}.pt"))
                 dreamer.data_buffer.save(ckpt_dir, fname='replay_buffer_phase_1.pkl')
                 loca_phase = "phase_2"
+                dreamer.current_phase = 2
                 train_env = make_env(args, loca_phase, "train")
                 test_env = make_env(args, loca_phase, "eval")
 

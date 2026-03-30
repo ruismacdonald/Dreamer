@@ -346,6 +346,8 @@ class ReplayBufferLoFoV2:
         # Per-hash FIFOs: bytes key -> deque of (ring_idx, insert_id)
         self.hash_fifos: dict[bytes, deque] = {}
 
+        self.phase_labels = np.zeros(size, dtype=np.uint8)  # 1=phase1, 2=phase2
+
     # ------------------------------------------------------------------
     # Flat kept-set helpers
 
@@ -377,7 +379,7 @@ class ReplayBufferLoFoV2:
     # ------------------------------------------------------------------
     # Writing
 
-    def add(self, obs, ac, rew, done, representation):
+    def add(self, obs, ac, rew, done, representation, phase=1):
         """
         Write one transition and update the per-hash FIFO.
 
@@ -387,6 +389,7 @@ class ReplayBufferLoFoV2:
             rew: float
             done: bool or float
             representation: np.ndarray, shape (obs_repr_size,) — required
+            phase: int, 1=phase1, 2=phase2
         """
         assert representation is not None, \
             "ReplayBufferLoFoV2 requires a representation on every add()"
@@ -430,6 +433,8 @@ class ReplayBufferLoFoV2:
         self.idx = (self.idx + 1) % self.size
         self.steps += 1
         self.episodes += int(done)
+
+        self.phase_labels[i] = phase
 
     # ------------------------------------------------------------------
     # Sampling
@@ -484,6 +489,12 @@ class ReplayBufferLoFoV2:
         fifo_sizes = [len(dq) for dq in self.hash_fifos.values()]
         n_full = sum(1 for s in fifo_sizes if s >= self.obs_hash_count)
         n_evicting = sum(1 for s in fifo_sizes if s > self.obs_hash_count)
+
+        buf = self._valid_buffer_size()
+        phase2_mask = self.phase_labels[:buf] == 2
+        phase1_kept = float(self.kept[:buf][~phase2_mask].mean()) if (~phase2_mask).any() else 1.0
+        phase2_kept = float(self.kept[:buf][phase2_mask].mean()) if phase2_mask.any() else 1.0
+
         return {
             'buffer_size': self._valid_buffer_size(),
             'buffer_steps': self.steps,
@@ -495,6 +506,8 @@ class ReplayBufferLoFoV2:
             'fifo_n_full': n_full,  # How many regions have hit the cap
             'fifo_n_evicting': n_evicting,  # How many regions are evicting
             'kept_fraction': len(self.kept_flat) / self._valid_buffer_size() if self._valid_buffer_size() > 0 else 1.0,
+            'phase1_kept_fraction': phase1_kept,
+            'phase2_kept_fraction': phase2_kept,
         }
     
     def save(self, dname, fname='replay_buffer.pkl'):
@@ -509,6 +522,7 @@ class ReplayBufferLoFoV2:
             '_global_insert_id': self._global_insert_id,
             'kept_flat': self.kept_flat, 'flat_pos': self.flat_pos,
             'hash_fifos': self.hash_fifos,
+            'phase_labels': self.phase_labels,
         }
         with open(os.path.join(dname, fname), 'wb') as f:
             pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -525,3 +539,4 @@ class ReplayBufferLoFoV2:
         self._global_insert_id = p['_global_insert_id']
         self.kept_flat = p['kept_flat']; self.flat_pos = p['flat_pos']
         self.hash_fifos = p['hash_fifos']
+        self.phase_labels = p['phase_labels']
