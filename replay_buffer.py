@@ -102,7 +102,7 @@ class ReplayBuffer:
                 # L2 (Euclidean) distance: sqrt(sum of squared differences) per stored transition
                 dists = np.linalg.norm(reprs - representation, axis=-1)  # (buf,)
                 
-                if self.steps < 100000 and self.steps % 10000 == 0:
+                if self.steps < 100000 and self.steps % 10000 == 0 and buf > 0:
                     print(f"[LoFo diag] step={self.steps} dist_mean={dists.mean():.4f} "
                         f"p10={np.percentile(dists,10):.4f} p20={np.percentile(dists,20):.4f} "
                         f"p50={np.percentile(dists,50):.4f}")
