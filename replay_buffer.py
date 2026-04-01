@@ -523,6 +523,7 @@ class ReplayBufferLoFoV2:
             'kept_flat': self.kept_flat, 'flat_pos': self.flat_pos,
             'hash_fifos': self.hash_fifos,
             'phase_labels': self.phase_labels,
+            'A': self.A,
         }
         with open(os.path.join(dname, fname), 'wb') as f:
             pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -540,3 +541,4 @@ class ReplayBufferLoFoV2:
         self.kept_flat = p['kept_flat']; self.flat_pos = p['flat_pos']
         self.hash_fifos = p['hash_fifos']
         self.phase_labels = p['phase_labels']
+        self.A = p['A']
