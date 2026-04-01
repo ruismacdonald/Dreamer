@@ -1,20 +1,20 @@
 #!/bin/bash
-#SBATCH --job-name=d_v1_r_rad_1
+#SBATCH --job-name=d_v2_r_norm_64_500
 #SBATCH --account=def-rsdjjana_gpu
-#SBATCH --time=0-13:00:00
+#SBATCH --time=0-18:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --exclude=ng[11105-11106,30708,31103]
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --array=0-2
 #SBATCH --acctg-freq=task=1
-#SBATCH --output=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1_rad_1/%A-%a.out
-#SBATCH --error=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1_rad_1/%A-%a.err
+#SBATCH --output=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v2_norm_64_500/%A-%a.out
+#SBATCH --error=/home/ruism/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v2_norm_64_500/%A-%a.err
 
 set -e -o pipefail
 
 # Top-level results dir on Lustre
-BASE_SAVE_DIR="$HOME/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v1_rad_1"
+BASE_SAVE_DIR="$HOME/projects/def-rsdjjana/ruism/Dreamer/results/reacherloca_v2_norm_64_500"
 mkdir -p "$BASE_SAVE_DIR"
 
 # Gentle stagger so all tasks don’t hammer Lustre at once
@@ -66,7 +66,7 @@ export PYTHONPATH="$DREAMER_SRC:${PYTHONPATH:-}"
 : "${SLURM_TMPDIR:=/tmp}"
 SEED="${SLURM_ARRAY_TASK_ID}"
 
-RUN_DIR="${SLURM_TMPDIR}/dreamer-v1-r-rad-1-${SLURM_JOB_ID:-0}-${SEED}"
+RUN_DIR="${SLURM_TMPDIR}/dreamer-v2-norm-r-64-500-${SLURM_JOB_ID:-0}-${SEED}"
 FINAL_DIR="${BASE_SAVE_DIR}/${SEED}"
 mkdir -p "$RUN_DIR" "$FINAL_DIR"
 
@@ -75,15 +75,16 @@ cd "$RUN_DIR"
 python -u "$DREAMER_SRC/dreamer.py" \
   --env 'reacherloca-easy' \
   --algo 'Dreamerv2' \
-  --exp-name 'reacherloca_v1_rad_1' \
+  --exp-name 'reacherloca_v2_norm_64_500' \
   --train \
   --loca-all-phases \
   --loca-phase1-steps 1000000 \
   --loca-phase2-steps 1500000 \
   --loca-phase3-steps 0 \
-  --loca-state-distance \
-  --loca-replay-count 2 \
-  --loca-replay-rad 1.0 \
+  --loca-state-distance-v2 \
+  --normalize-reprs \
+  --loca-hash-size 64 \
+  --loca-hash-count 500 \
   --seed "${SEED}"
 
 rsync -a --partial --inplace --no-whole-file "$RUN_DIR/" "$FINAL_DIR/"

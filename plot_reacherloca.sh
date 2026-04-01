@@ -31,54 +31,19 @@ export NUMEXPR_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 
 python plot_reacherloca.py \
-  --indir  data/reacherloca_fifo/ data/reacherloca_v1_rad_1  data/reacherloca_v1_rad_2  data/reacherloca_v2_norm_100  data/reacherloca_v2_norm_50 \
+  --indir  data/reacherloca_fifo/ data/reacherloca_v1_rad_03 data/reacherloca_v1_rad_04  data/reacherloca_v2_norm_64_500  data/reacherloca_v2_norm_256_100 \
   --outdir results/reacherloca \
   --subdir False \
   --xaxis step \
   --yaxis eval_avg_reward \
   --bins 40000 \
-  --methods reacherloca_fifo reacherloca_v1_rad_1  reacherloca_v1_rad_2  reacherloca_v2_norm_100  reacherloca_v2_norm_50 \
+  --methods reacherloca_fifo reacherloca_v1_rad_03  reacherloca_v1_rad_04  reacherloca_v2_norm_64_500  reacherloca_v2_norm_256_100 \
   --add none \
   --labels \
     reacherloca_fifo "DreamerV2 + FIFO" \
-    reacherloca_v1_rad_1 "DreamerV2 + LoFoV1 (rad 1)" \
-    reacherloca_v1_rad_2 "DreamerV2 + LoFoV1 (rad 2)" \
-    reacherloca_v2_norm_100 "DreamerV2 + LoFoV2 (norm 100)" \
-    reacherloca_v2_norm_50 "DreamerV2 + LoFoV2 (norm 50)"
-
-# data/reacherloca_v1_2/ data/reacherloca_v1_5/ data/reacherloca_v1_10/ data/reacherloca_v2/
-#reacherloca_v1_2  reacherloca_v1_5  reacherloca_v1_10  reacherloca_v2
-# reacherloca_v1_2 "DreamerV2 + LoFoV1 (2)" \
-# reacherloca_v1_5 "DreamerV2 + LoFoV1 (5)" \
-# reacherloca_v1_10 "DreamerV2 + LoFoV1 (10)" \
-# reacherloca_v2 "DreamerV2 + LoFoV2" \
-
-# python plot_reacherloca.py \
-#   --indir  data/reacherloca_fifo_10seeds_save/ data/reacherloca_v1_10seeds_save/ ../Dreamer_v2_SDH/data/reacherloca_v2_state_dist_10_seeds/ ../Dreamer_v2_SDH/data/reacherloca_v2_rep_norm_state_dist_10_seeds/ \
-#   --outdir results/reacherloca/r \
-#   --subdir False \
-#   --xaxis step \
-#   --yaxis eval_avg_reward \
-#   --bins 40000 \
-#   --methods reacherloca_fifo_10seeds_save reacherloca_v1_10seeds_save reacherloca_v2_state_dist_10_seeds reacherloca_v2_rep_norm_state_dist_10_seeds\
-#   --add none \
-#   --labels \
-#     reacherloca_fifo_10seeds_save "DreamerV2 + FIFO" \
-#     reacherloca_v1_10seeds_save "DreamerV2 + LoFoV1" \
-#     reacherloca_v2_state_dist_10_seeds "DreamerV2 + LoFoV2 (no norm)" \
-#     reacherloca_v2_rep_norm_state_dist_10_seeds "DreamerV2 + LoFoV2"
-
-# python plot_randomizedreacherloca.py \
-#   --indir  data/randomizedreacherloca_fifo_10seeds/ data/randomizedreacherloca_v1_10seeds/ ../Dreamer_v2_SDH/data/randomizedreacherloca_v2_rep_norm_state_dist_10_seeds/ \
-#   --outdir results/reacherloca/rr \
-#   --subdir False \
-#   --xaxis step \
-#   --yaxis eval_avg_reward \
-#   --bins 40000 \
-#   --methods randomizedreacherloca_fifo_10seeds randomizedreacherloca_v1_10seeds randomizedreacherloca_v2_rep_norm_state_dist_10_seeds \
-#   --add none \
-#   --labels \
-#     randomizedreacherloca_fifo_10seeds "DreamerV2 + FIFO" \
-#     randomizedreacherloca_v1_10seeds "DreamerV2 + LoFoV1" \
-#     randomizedreacherloca_v2_rep_norm_state_dist_10_seeds "DreamerV2 + LoFoV2 (norm)"
+    reacherloca_v1_rad_03 "DreamerV2 + LoFoV1 (rad 0.3)" \
+    reacherloca_v1_rad_04 "DreamerV2 + LoFoV1 (rad 0.4)" \
+    reacherloca_v2_norm_64_500 "DreamerV2 + LoFoV2 (norm 64, 500)" \
+    reacherloca_v2_norm_256_100 "DreamerV2 + LoFoV2 (norm 256, 100)" 
+   
     
