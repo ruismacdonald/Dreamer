@@ -348,7 +348,7 @@ class ReplayBufferLoFoV2:
 
         self.phase_labels = np.zeros(size, dtype=np.uint8)  # 1=phase1, 2=phase2
 
-    # ------------------------------------------------------------------
+
     # Flat kept-set helpers
 
     def _flat_add(self, idx):
@@ -367,7 +367,7 @@ class ReplayBufferLoFoV2:
         self.kept_flat.pop()
         self.flat_pos[idx] = -1
 
-    # ------------------------------------------------------------------
+
     # SimHash
 
     def _hash_key(self, rep: np.ndarray) -> bytes:
@@ -376,7 +376,7 @@ class ReplayBufferLoFoV2:
         bits = (self.A @ rep >= 0).astype(np.uint8)
         return np.packbits(bits, bitorder='little').tobytes()
 
-    # ------------------------------------------------------------------
+
     # Writing
 
     def add(self, obs, ac, rew, done, representation, phase=1):
@@ -436,7 +436,7 @@ class ReplayBufferLoFoV2:
 
         self.phase_labels[i] = phase
 
-    # ------------------------------------------------------------------
+
     # Sampling
 
     def _sample_idx(self, L):
@@ -471,7 +471,7 @@ class ReplayBufferLoFoV2:
         idxs = np.asarray([self._sample_idx(L) for _ in range(n)])
         return self._retrieve_batch(idxs, n, L)
 
-    # ------------------------------------------------------------------
+
     # Utilities
 
     def _valid_buffer_size(self):

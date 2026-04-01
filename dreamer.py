@@ -671,8 +671,13 @@ def main():
                 dreamer.data_buffer.save(ckpt_dir, fname='replay_buffer_phase_1.pkl')
                 loca_phase = "phase_2"
                 dreamer.current_phase = 2
+                logdir = os.path.join(data_path, args.exp_name, str(args.seed), loca_phase)  # ADD THIS
+                if not os.path.exists(logdir):
+                    os.makedirs(logdir)
+                logger = Logger(logdir)
                 train_env = make_env(args, loca_phase, "train")
                 test_env = make_env(args, loca_phase, "eval")
+                dreamer._build_model()  # Rebuild model to reset optimizers for new phase
 
             if (
                 args.loca_all_phases
@@ -683,6 +688,7 @@ def main():
                 if not (os.path.exists(ckpt_dir)):
                     os.makedirs(ckpt_dir)
                 dreamer.save(os.path.join(ckpt_dir, f"models_{loca_phase}.pt"))
+                dreamer.data_buffer.save(ckpt_dir, fname='replay_buffer_phase_2.pkl')
 
                 loca_phase = "phase_3"
                 train_env = make_env(args, loca_phase, "train")
