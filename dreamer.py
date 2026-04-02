@@ -172,9 +172,10 @@ class Dreamer:
         prior_dist = self.rssm.get_dist(prior['mean'], prior['std'])
         post_dist = self.rssm.get_dist(self.posterior['mean'], self.posterior['std'])
 
-        # kept: (L, n, 1), aligned to the posterior steps which are obs[1:], i.e. kept[:-1] has shape (L-1, n, 1) matching features
+        # kept: (L, n, 1), only applied to reward loss
         kept_steps = kept[:-1]  # (L-1, n, 1)
         n_kept = kept_steps.sum().clamp(min=1)
+        n_all = (self.args.train_seq_len - 1) * self.args.batch_size
 
         # KL loss
         if self.args.algo == 'Dreamerv2':
@@ -183,22 +184,21 @@ class Dreamer:
             kl_loss = self.args.kl_alpha * (
                 distributions.kl.kl_divergence(
                     self.rssm.get_dist(post_no_grad['mean'], post_no_grad['std']), prior_dist
-                ) * kept_steps.squeeze(-1)
-            ).sum() / n_kept
+                )
+            ).sum() / n_all
             kl_loss += (1 - self.args.kl_alpha) * (
                 distributions.kl.kl_divergence(
                     post_dist, self.rssm.get_dist(prior_no_grad['mean'], prior_no_grad['std'])
-                ) * kept_steps.squeeze(-1)
-            ).sum() / n_kept
+                )
+            ).sum() / n_all
         else:
             kl = distributions.kl.kl_divergence(post_dist, prior_dist)     # (L-1, n, stoch_size)
             kl = torch.max(kl, kl.new_full(kl.size(), self.args.free_nats))
-            kl_loss = (kl * kept_steps).sum() / n_kept
-        
+            kl_loss = kl.sum() / n_all
+
         # Obs loss
-        # obs_dist.log_prob: (L-1, n, C, H, W) -> sum over pixels, mask over steps
-        obs_log_prob = obs_dist.log_prob(obs[1:])  # (L-1, n) — Independent already sums C,H,W
-        obs_loss = -(obs_log_prob * kept_steps.squeeze(-1)).sum() / n_kept
+        obs_log_prob = obs_dist.log_prob(obs[1:])  # (L-1, n)
+        obs_loss = -obs_log_prob.sum() / n_all
 
         # Reward loss
         rew_log_prob = rew_dist.log_prob(rews[:-1]).squeeze(-1)             # (L-1, n)
@@ -207,7 +207,7 @@ class Dreamer:
         # Discount loss
         if self.args.use_disc_model:
             disc_log_prob = disc_dist.log_prob(nonterms[:-1]).squeeze(-1)   # (L-1, n)
-            disc_loss = -(disc_log_prob * kept_steps.squeeze(-1)).sum() / n_kept
+            disc_loss = -disc_log_prob.sum() / n_all
             model_loss = (self.args.kl_loss_coeff * kl_loss + obs_loss + rew_loss + self.args.disc_loss_coeff * disc_loss)
         else:
             model_loss = self.args.kl_loss_coeff * kl_loss + obs_loss + rew_loss
