@@ -677,7 +677,7 @@ def main():
                 logger = Logger(logdir)
                 train_env = make_env(args, loca_phase, "train")
                 test_env = make_env(args, loca_phase, "eval")
-                dreamer._build_model()  # Reset model and optimizers for phase 2
+                dreamer._build_model(restore=False)  # Reset model and optimizers for phase 2
 
             if (
                 args.loca_all_phases
