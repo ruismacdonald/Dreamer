@@ -45,6 +45,20 @@ python plot_reacherloca.py \
     reacherloca_v2_64_500 "DreamerV2 + LoFoV2 (no norm)" \
     reacherloca_v2_norm_64_500 "DreamerV2 + LoFoV2 "
 
+python plot_reacherloca.py \
+  --indir  data/reacherloca_fifo_rew/ data/reacherloca_v1_rad_03_rew data/reacherloca_v2_64_500_rew data/reacherloca_v2_norm_64_500_rew \
+  --outdir results/reacherloca_rew \
+  --subdir False \
+  --xaxis step \
+  --yaxis eval_avg_reward \
+  --bins 40000 \
+  --methods reacherloca_fifo_rew reacherloca_v1_rad_03_rew reacherloca_v2_64_500_rew reacherloca_v2_norm_64_500_rew \
+  --add none \
+  --labels \
+    reacherloca_fifo_rew "DreamerV2 + FIFO" \
+    reacherloca_v1_rad_03_rew "DreamerV2 + LoFoV1" \
+    reacherloca_v2_64_500_rew "DreamerV2 + LoFoV2 (no norm)" \
+    reacherloca_v2_norm_64_500_rew "DreamerV2 + LoFoV2 "
 
 
    
