@@ -31,19 +31,21 @@ export NUMEXPR_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 
 python plot_reacherloca.py \
-  --indir  data/reacherloca_fifo_2/ data/reacherloca_v1_rad_03 data/reacherloca_v1_rad_04  data/reacherloca_v2_64_500  data/reacherloca_v2_norm_64_500 \
+  --indir  data/reacherloca_fifo_2/ data/reacherloca_v1_rad_03 data/reacherloca_v2_64_500 data/reacherloca_v2_norm_64_500 \
   --outdir results/reacherloca \
   --subdir False \
   --xaxis step \
   --yaxis eval_avg_reward \
   --bins 40000 \
-  --methods reacherloca_fifo_2 reacherloca_v1_rad_03  reacherloca_v1_rad_04  reacherloca_v2_64_500  reacherloca_v2_norm_64_500 \
+  --methods reacherloca_fifo_2 reacherloca_v1_rad_03 reacherloca_v2_64_500 reacherloca_v2_norm_64_500 \
   --add none \
   --labels \
     reacherloca_fifo_2 "DreamerV2 + FIFO" \
-    reacherloca_v1_rad_03 "DreamerV2 + LoFoV1 (rad 0.3)" \
-    reacherloca_v1_rad_04 "DreamerV2 + LoFoV1 (rad 0.4)" \
-    reacherloca_v2_64_500 "DreamerV2 + LoFoV2 (64_500)" \
-    reacherloca_v2_norm_64_500 "DreamerV2 + LoFoV2 (norm 64, 500)"
+    reacherloca_v1_rad_03 "DreamerV2 + LoFoV1" \
+    reacherloca_v2_64_500 "DreamerV2 + LoFoV2 (no norm)" \
+    reacherloca_v2_norm_64_500 "DreamerV2 + LoFoV2 "
+
+
+
    
     
