@@ -68,6 +68,72 @@ SEED="${SLURM_ARRAY_TASK_ID}"
 
 
 
+CKPT_PATH="${DATA_BASE}/data/reacherloca_fifo_2/${SEED}/phase_1/ckpts/models.pt"
+
+OUT_BASE="$DREAMER_SRC/data/rewards/fifo_${SEED}_phase2"
+mkdir -p "$OUT_BASE"
+
+RUN_DIR="${SLURM_TMPDIR}/dreamer-rewards-${SLURM_JOB_ID:-0}-${SEED}"
+mkdir -p "$RUN_DIR"
+cd "$RUN_DIR"
+
+python -u "$DREAMER_SRC/make_rewards.py" \
+  --env 'reacherloca-easy' \
+  --algo 'Dreamerv2' \
+  --exp-name 'reacherloca_fifo_rewards' \
+  --seed "${SEED}" \
+  --action-repeat 2 \
+  --checkpoint-model-path "$CKPT_PATH"
+
+rsync -a "$RUN_DIR/heat_data.npy" "$OUT_BASE/"
+echo "Saved to: $OUT_BASE/heat_data.npy"
+
+
+
+CKPT_PATH="${DATA_BASE}/data/reacherloca_v1_rad_03/${SEED}/phase_1/ckpts/models.pt"
+
+OUT_BASE="$DREAMER_SRC/data/rewards/v1_${SEED}_phase2"
+mkdir -p "$OUT_BASE"
+
+RUN_DIR="${SLURM_TMPDIR}/dreamer-rewards-${SLURM_JOB_ID:-0}-${SEED}"
+mkdir -p "$RUN_DIR"
+cd "$RUN_DIR"
+
+python -u "$DREAMER_SRC/make_rewards.py" \
+  --env 'reacherloca-easy' \
+  --algo 'Dreamerv2' \
+  --exp-name 'reacherloca_v1_rewards' \
+  --seed "${SEED}" \
+  --action-repeat 2 \
+  --checkpoint-model-path "$CKPT_PATH"
+
+rsync -a "$RUN_DIR/heat_data.npy" "$OUT_BASE/"
+echo "Saved to: $OUT_BASE/heat_data.npy"
+
+
+
+CKPT_PATH="${DATA_BASE}/../Dreamer/data/reacherloca_v2_norm_64_500/${SEED}/phase_1/ckpts/models.pt"
+
+OUT_BASE="$DREAMER_SRC/data/rewards/v2_${SEED}_phase2"
+mkdir -p "$OUT_BASE"
+
+RUN_DIR="${SLURM_TMPDIR}/dreamer-rewards-${SLURM_JOB_ID:-0}-${SEED}"
+mkdir -p "$RUN_DIR"
+cd "$RUN_DIR"
+
+python -u "$DREAMER_SRC/make_rewards.py" \
+  --env 'reacherloca-easy' \
+  --algo 'Dreamerv2' \
+  --exp-name 'reacherloca_v2_rewards' \
+  --seed "${SEED}" \
+  --action-repeat 2 \
+  --checkpoint-model-path "$CKPT_PATH"
+
+rsync -a "$RUN_DIR/heat_data.npy" "$OUT_BASE/"
+echo "Saved to: $OUT_BASE/heat_data.npy"
+
+
+
 CKPT_PATH="${DATA_BASE}/data/reacherloca_fifo_2/${SEED}/phase_2/ckpts/models.pt"
 
 OUT_BASE="$DREAMER_SRC/data/rewards/fifo_${SEED}_phase2"
