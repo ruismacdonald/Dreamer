@@ -131,3 +131,69 @@ python -u "$DREAMER_SRC/make_rewards.py" \
 
 rsync -a "$RUN_DIR/heat_data.npy" "$OUT_BASE/"
 echo "Saved to: $OUT_BASE/heat_data.npy"
+
+
+
+# CKPT_PATH="${DATA_BASE}/data/reacherloca_fifo_rew/${SEED}/phase_2/ckpts/models.pt"
+
+# OUT_BASE="$DREAMER_SRC/data/rewards_rew/fifo_${SEED}_phase2"
+# mkdir -p "$OUT_BASE"
+
+# RUN_DIR="${SLURM_TMPDIR}/dreamer-rewards-rew-${SLURM_JOB_ID:-0}-${SEED}"
+# mkdir -p "$RUN_DIR"
+# cd "$RUN_DIR"
+
+# python -u "$DREAMER_SRC/make_rewards.py" \
+#   --env 'reacherloca-easy' \
+#   --algo 'Dreamerv2' \
+#   --exp-name 'reacherloca_fifo_rewards_rew' \
+#   --seed "${SEED}" \
+#   --action-repeat 2 \
+#   --checkpoint-model-path "$CKPT_PATH"
+
+# rsync -a "$RUN_DIR/heat_data.npy" "$OUT_BASE/"
+# echo "Saved to: $OUT_BASE/heat_data.npy"
+
+
+
+# CKPT_PATH="${DATA_BASE}/data/reacherloca_v1_rad_03_rew/${SEED}/phase_2/ckpts/models.pt"
+
+# OUT_BASE="$DREAMER_SRC/data/rewards_rew/v1_${SEED}_phase2"
+# mkdir -p "$OUT_BASE"
+
+# RUN_DIR="${SLURM_TMPDIR}/dreamer-rewards-rew-${SLURM_JOB_ID:-0}-${SEED}"
+# mkdir -p "$RUN_DIR"
+# cd "$RUN_DIR"
+
+# python -u "$DREAMER_SRC/make_rewards.py" \
+#   --env 'reacherloca-easy' \
+#   --algo 'Dreamerv2' \
+#   --exp-name 'reacherloca_v1_rewards_rew' \
+#   --seed "${SEED}" \
+#   --action-repeat 2 \
+#   --checkpoint-model-path "$CKPT_PATH"
+
+# rsync -a "$RUN_DIR/heat_data.npy" "$OUT_BASE/"
+# echo "Saved to: $OUT_BASE/heat_data.npy"
+
+
+
+# CKPT_PATH="${DATA_BASE}/../Dreamer/data/reacherloca_v2_norm_64_500_rew/${SEED}/phase_2/ckpts/models.pt"
+
+# OUT_BASE="$DREAMER_SRC/data/rewards_rew/v2_${SEED}_phase2"
+# mkdir -p "$OUT_BASE"
+
+# RUN_DIR="${SLURM_TMPDIR}/dreamer-rewards-rew-${SLURM_JOB_ID:-0}-${SEED}"
+# mkdir -p "$RUN_DIR"
+# cd "$RUN_DIR"
+
+# python -u "$DREAMER_SRC/make_rewards.py" \
+#   --env 'reacherloca-easy' \
+#   --algo 'Dreamerv2' \
+#   --exp-name 'reacherloca_v2_rewards_rew' \
+#   --seed "${SEED}" \
+#   --action-repeat 2 \
+#   --checkpoint-model-path "$CKPT_PATH"
+
+# rsync -a "$RUN_DIR/heat_data.npy" "$OUT_BASE/"
+# echo "Saved to: $OUT_BASE/heat_data.npy"
